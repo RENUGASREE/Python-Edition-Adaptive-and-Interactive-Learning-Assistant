@@ -64,3 +64,6 @@ logs/
 
 # Custom
 migrations/
+
+# Explicitly include queryClient.ts for Vercel deployment
+!client/src/lib/queryClient.ts
