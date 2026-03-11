@@ -10,7 +10,8 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from core.models import Module, Lesson, Quiz, Question, Challenge, CertificateTemplate
-from lessons.models import LessonProfile
+from lessons.models import LessonProfile, LessonChunk
+from lessons.services import generate_embedding
 from gamification.models import Badge as GamificationBadge
 from core.models import Badge as CoreBadge
 
@@ -495,6 +496,16 @@ class Command(BaseCommand):
                         lesson.save(update_fields=list(updates.keys()))
                 else:
                     created_lessons += 1
+
+                # Create LessonChunks for RAG
+                LessonChunk.objects.filter(lesson_id=lesson.id).delete()  # Clear existing chunks
+                for i, chunk_content in enumerate(_chunk_iter(lesson.content)):
+                    embedding = generate_embedding(chunk_content)
+                    LessonChunk.objects.create(
+                        lesson_id=lesson.id,
+                        content=chunk_content,
+                        embedding_vector=embedding,
+                    )
 
                 # Quiz (1 per lesson)
                 quiz_title = f"{spec.title} Quiz"

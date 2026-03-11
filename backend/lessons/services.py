@@ -29,3 +29,7 @@ def create_lesson_chunks(lesson_id: int, topic: str, chunks, embeddings):
             content=content,
             embedding_vector=embedding,
         )
+
+def generate_embedding(text: str) -> list[float]:
+    # Placeholder for actual embedding generation
+    return [0.0] * 1536  # Example: return a list of 1536 zeros
