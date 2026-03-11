@@ -1,0 +1,35 @@
+services: 
+   - type: web 
+     name: adaptive-python-backend 
+     runtime: python 
+     buildCommand: | 
+       pip install -r backend/requirements.txt 
+       python backend/manage.py migrate 
+     startCommand: gunicorn python_edition_django.wsgi 
+     envVars: 
+       - key: DATABASE_URL 
+         fromDatabase: 
+           name: adaptive-python-db 
+           property: connectionString 
+       - key: DJANGO_SECRET_KEY 
+         generateValue: true 
+       - key: DJANGO_DEBUG 
+         value: false 
+       - key: ALLOWED_HOSTS 
+         value: .onrender.com 
+       - key: CORS_ALLOWED_ORIGINS 
+         value: `https://adaptive-python-frontend.onrender.com,https://python-edition-adaptive-and-interactive.onrender.com` 
+ 
+   - type: web 
+     name: adaptive-python-frontend 
+     runtime: node 
+     buildCommand: | 
+       npm install 
+       npm run build 
+     startCommand: npx serve -s dist 
+     envVars: 
+       - key: VITE_API_BASE_URL 
+         value: `https://adaptive-python-backend.onrender.com/api` 
+ 
+ databases: 
+   - name: adaptive-python-db 
