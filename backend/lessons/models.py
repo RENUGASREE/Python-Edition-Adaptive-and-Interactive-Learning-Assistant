@@ -1,6 +1,11 @@
 from django.db import models
+from django.conf import settings
 
-EMBEDDING_FIELD = models.JSONField(default=list, blank=True)
+if "pgvector.django" in settings.INSTALLED_APPS:
+    from pgvector.django import VectorField
+    EMBEDDING_FIELD = VectorField(dimensions=1536, null=True, blank=True)
+else:
+    EMBEDDING_FIELD = models.JSONField(default=list, blank=True)
 
 
 class LessonProfile(models.Model):

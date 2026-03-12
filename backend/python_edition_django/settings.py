@@ -64,6 +64,11 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
 ]
 
+PGVECTOR_ENABLED = os.getenv("PGVECTOR_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+
+if PGVECTOR_ENABLED:
+    INSTALLED_APPS.append('pgvector')
+
 AUTH_USER_MODEL = 'core.User'
 
 
