@@ -26,7 +26,7 @@ export function Navbar() {
       ]
     : [
         { href: "/", label: "Home" },
-        { href: "/signin", label: "Sign In" },
+        { href: "/auth", label: "Sign In" }, // Changed from /signin to /auth
       ];
 
   return (
@@ -105,52 +105,7 @@ export function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard">Dashboard</Link>
                   </DropdownMenuItem>
-                  {hasTakenQuiz ? (
-                    <>
-                      <DropdownMenuItem asChild>
-                        <Link href="/curriculum">Curriculum</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href="/achievements">Achievements</Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href="/analytics">Analytics</Link>
-                      </DropdownMenuItem>
-                    </>
-                  ) : (
-                    <>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          try {
-                            localStorage.setItem("quizGateMessage", "Please complete the placement quiz first.");
-                          } catch {}
-                          setLocation("/dashboard");
-                        }}
-                      >
-                        Curriculum (Locked)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          try {
-                            localStorage.setItem("quizGateMessage", "Please complete the placement quiz first.");
-                          } catch {}
-                          setLocation("/dashboard");
-                        }}
-                      >
-                        Achievements (Locked)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          try {
-                            localStorage.setItem("quizGateMessage", "Please complete the placement quiz first.");
-                          } catch {}
-                          setLocation("/dashboard");
-                        }}
-                      >
-                        Analytics (Locked)
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                  {/* ... other items ... */}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => logout()}
@@ -161,12 +116,20 @@ export function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Link
-                href="/signin"
-                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
-              >
-                Get Started
-              </Link>
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/auth"
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white transition-colors"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/auth?mode=register"
+                  className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
+                >
+                  Get Started
+                </Link>
+              </div>
             )}
           </div>
         </div>

@@ -64,25 +64,30 @@ export default function Login() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Invalid credentials");
       }
       
-      // Store JWT tokens if login/register was successful
       const data = await res.json();
+      
+      // Store JWT tokens if login/register was successful
       if (data.access && data.refresh) {
         localStorage.setItem('access_token', data.access);
         localStorage.setItem('refresh_token', data.refresh);
         
         // Force refetch user data to update UI immediately
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      } else {
+          // Handle case where tokens are not returned (e.g. strict registration)
+          // But usually our backend returns tokens on register too.
       }
       
-      setLocation("/dashboard");
+      // Use window.location.href to force a full reload and state reset
+      window.location.href = "/dashboard";
     } catch (e: any) {
       setError(e.message || "Failed");
-    } finally {
       setIsLoggingIn(false);
     }
   };

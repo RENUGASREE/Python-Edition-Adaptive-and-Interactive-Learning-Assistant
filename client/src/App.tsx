@@ -35,7 +35,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   }
 
   if (!user) {
-    return <Redirect to="/signin" />;
+    return <Redirect to="/auth" />;
   }
 
   const hasTakenQuiz = Boolean(user.has_taken_quiz || user.diagnostic_completed);
@@ -75,12 +75,16 @@ function Router() {
         {user ? <Redirect to="/dashboard" /> : <Landing />}
       </Route>
       
-      <Route path="/signin">
+      <Route path="/auth">
         {user ? <Redirect to="/dashboard" /> : <Login />}
       </Route>
 
+      <Route path="/signin">
+        <Redirect to="/auth" />
+      </Route>
+
       <Route path="/login">
-        <Redirect to="/signin" />
+        <Redirect to="/auth" />
       </Route>
       
       <Route path="/dashboard">
