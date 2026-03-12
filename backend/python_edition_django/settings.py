@@ -82,24 +82,37 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# CORS Configuration
 cors_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 if cors_origins:
-    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(",")]
-else:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+elif DEBUG:
     CORS_ALLOWED_ORIGINS = [
         "http://localhost:3000",
         "http://localhost:3002",
-        "https://adaptive-python-frontend.onrender.com"
     ]
+else:
+    CORS_ALLOWED_ORIGINS = []
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+cors_allow_all = os.getenv("CORS_ALLOW_ALL_ORIGINS", "")
+if cors_allow_all:
+    CORS_ALLOW_ALL_ORIGINS = cors_allow_all.strip().lower() in ("1", "true", "yes")
+else:
+    CORS_ALLOW_ALL_ORIGINS = DEBUG
+
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:3002",
-    "https://adaptive-python-frontend.onrender.com"
-]
+
+csrf_origins = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+if csrf_origins:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins.split(",") if origin.strip()]
+elif cors_origins:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+elif DEBUG:
+    CSRF_TRUSTED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:3002",
+    ]
+else:
+    CSRF_TRUSTED_ORIGINS = []
 
 
 ROOT_URLCONF = 'python_edition_django.urls'
@@ -183,13 +196,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 if not DEBUG:
+    WHITENOISE_USE_FINDERS = True
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "true").strip().lower() in ("1", "true", "yes")
     SESSION_COOKIE_SECURE = True
