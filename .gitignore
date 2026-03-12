@@ -67,4 +67,6 @@ logs/
 
 
 # Explicitly include queryClient.ts for Vercel deployment
+!client/src/lib/
+!client/src/lib/**
 !client/src/lib/queryClient.ts
