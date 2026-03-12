@@ -38,13 +38,17 @@ export default function Login() {
   }, [user, setLocation]);
 
   const handleSubmit = async () => {
-    setIsLoggingIn(true);
     setError(null);
+    if (mode === "register" && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (mode === "register" && !isStrongPassword(password)) {
+      setError("Use a strong password: min 8 chars with uppercase, lowercase, number, and special character.");
+      return;
+    }
+    setIsLoggingIn(true);
     try {
-      if (mode === "register" && password !== confirmPassword) {
-        setError("Passwords do not match.");
-        return;
-      }
       const endpoint =
         mode === "login"
           ? apiUrl("/auth/login")
@@ -53,17 +57,16 @@ export default function Login() {
         mode === "login"
           ? { identifier, password }
           : { email: identifier, password, firstName: firstName || undefined, lastName: lastName || undefined };
-      
-      if (mode === "register" && !isStrongPassword(password)) {
-        setError("Use a strong password: min 8 chars with uppercase, lowercase, number, and special character.");
-        return;
-      }
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -79,15 +82,17 @@ export default function Login() {
         
         // Force refetch user data to update UI immediately
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      } else {
-          // Handle case where tokens are not returned (e.g. strict registration)
-          // But usually our backend returns tokens on register too.
       }
       
       // Use window.location.href to force a full reload and state reset
       window.location.href = "/dashboard";
     } catch (e: any) {
-      setError(e.message || "Failed");
+      const message =
+        e?.name === "AbortError"
+          ? "Request timed out. The backend may be starting up. Please try again."
+          : e?.message || "Failed";
+      setError(message);
+    } finally {
       setIsLoggingIn(false);
     }
   };

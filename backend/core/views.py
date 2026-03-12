@@ -233,6 +233,7 @@ def get_advanced_variant(module_id, base_lesson):
         difficulty="Pro",
     ).first()
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (permissions.AllowAny,)
