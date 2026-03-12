@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names \"Backend,Frontend\" \"set NODE_ENV=development && set DATABASE_URL=postgresql://postgres:The_renu%4028@localhost:5432/python_edition_db&& tsx --watch server/index.ts\" \"vite --port 3002\"",
     "build": "tsx script/build.ts",
+    "build:client": "vite build",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push"
