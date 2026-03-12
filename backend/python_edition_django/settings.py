@@ -33,11 +33,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "true").strip().lower() in ("1", "true", "yes"
 
 APPEND_SLASH = True
 
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    ".onrender.com"
-]
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", ".onrender.com").split(",")
 
 
 # Application definition
@@ -84,7 +80,17 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3002,https://adaptive-python-frontend.onrender.com").split(",") if o.strip()]
+# CORS Configuration
+cors_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+if cors_origins:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(",")]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:3002",
+        "https://adaptive-python-frontend.onrender.com"
+    ]
+
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
@@ -116,45 +122,25 @@ WSGI_APPLICATION = 'python_edition_django.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-#
-# In production (Render), `DATABASE_URL` is provided and points to PostgreSQL.
-# For local development, if no DATABASE_URL or explicit DB_* settings are
-# configured, fall back to a simple SQLite database so the project can run
-# without a local Postgres instance.
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASES = {
+    "default": dj_database_url.config(
+        default=os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR}/db.sqlite3"),
+        conn_max_age=600,
+        ssl_require=not DEBUG
+    )
+}
 
-if DATABASE_URL:
-    # Primary path for hosted deployments
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=not DEBUG,
-        )
+# If using local environment variables for Postgres instead of DATABASE_URL
+if not os.getenv("DATABASE_URL") and os.getenv("DB_ENGINE"):
+    DATABASES["default"] = {
+        "ENGINE": os.getenv("DB_ENGINE"),
+        "NAME": os.getenv("DB_NAME", "python_edition_db"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("DB_PASSWORD") or ("The_renu@28" if DEBUG else ""),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5432"),
     }
-else:
-    engine = os.getenv("DB_ENGINE")
-    if engine:
-        # Explicit engine configured via env (e.g. local Postgres)
-        DATABASES = {
-            "default": {
-                "ENGINE": engine,
-                "NAME": os.getenv("DB_NAME", "python_edition_db"),
-                "USER": os.getenv("DB_USER", "postgres"),
-                "PASSWORD": os.getenv("DB_PASSWORD") or ("The_renu@28" if DEBUG else ""),
-                "HOST": os.getenv("DB_HOST", "localhost"),
-                "PORT": os.getenv("DB_PORT", "5432"),
-            }
-        }
-    else:
-        # Safe default for local development
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.sqlite3",
-                "NAME": BASE_DIR / "db.sqlite3",
-            }
-        }
 
 
 # Password validation

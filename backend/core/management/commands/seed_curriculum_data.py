@@ -575,11 +575,49 @@ class Command(BaseCommand):
                 if ch_created:
                     created_challenges += 1
 
+            # Badges
+            created_badges = 0
+            badges_data = [
+                ("first-steps", "First Steps – Complete first lesson"),
+                ("quiz-master", "Quiz Master – Score 80%+ in placement quiz"),
+                ("consistency-starter", "Consistency Starter – 3 day streak"),
+                ("code-warrior", "Code Warrior – Complete 10 lessons"),
+                ("python-apprentice", "Python Apprentice – Complete Module 1"),
+                ("python-expert", "Python Expert – Complete all modules"),
+                ("perfect-score", "Perfect Score – 100% on any quiz"),
+                ("fast-learner", "Fast Learner – Finish module in under 3 days"),
+            ]
+            for code, title in badges_data:
+                obj, was_created = GamificationBadge.objects.get_or_create(
+                    code=code, 
+                    defaults={"title": title, "description": title}
+                )
+                if was_created:
+                    created_badges += 1
+
+            # Certificate Templates
+            created_certs = 0
+            certs_data = [
+                ("beginner-python", "Beginner Python Certificate", "Awarded for completing beginner track"),
+                ("intermediate-python", "Intermediate Python Certificate", "Awarded for completing intermediate track"),
+                ("advanced-python", "Advanced Python Certificate", "Awarded for completing advanced track"),
+                ("module-completion", "Module Completion Certificate", "Awarded for completing any module"),
+                ("full-course", "Full Course Completion Certificate", "Awarded for completing the full curriculum"),
+            ]
+            for code, title, desc in certs_data:
+                obj, was_created = CertificateTemplate.objects.get_or_create(
+                    code=code, 
+                    defaults={"title": title, "description": desc}
+                )
+                if was_created:
+                    created_certs += 1
+
         self.stdout.write(
             self.style.SUCCESS(
                 "Curriculum seed complete. "
                 f"modules+{created_modules}, lessons+{created_lessons}, quizzes+{created_quizzes}, "
-                f"questions+{created_questions}, challenges+{created_challenges}, profiles~{upserted_profiles} "
+                f"questions+{created_questions}, challenges+{created_challenges}, profiles~{upserted_profiles}, "
+                f"badges+{created_badges}, certificates+{created_certs} "
                 f"at {timezone.now().isoformat(timespec='seconds')}"
             )
         )
