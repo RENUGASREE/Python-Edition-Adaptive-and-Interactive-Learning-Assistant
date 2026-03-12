@@ -44,7 +44,6 @@ export default function Login() {
       return;
     }
     if (mode === "register" && !isStrongPassword(password)) {
-      setError("Use a strong password: min 8 chars with uppercase, lowercase, number, and special character.");
       return;
     }
     setIsLoggingIn(true);
@@ -167,6 +166,12 @@ export default function Login() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full px-4 py-3 bg-muted/50 border border-transparent focus:border-primary rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary/20"
                   />
+                </div>
+              )}
+
+              {mode === "register" && (
+                <div className="text-xs text-muted-foreground">
+                  Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character.
                 </div>
               )}
 

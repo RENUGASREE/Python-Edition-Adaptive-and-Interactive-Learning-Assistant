@@ -93,6 +93,10 @@ elif DEBUG:
 else:
     CORS_ALLOWED_ORIGINS = []
 
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.onrender\.com$",
+]
+
 cors_allow_all = os.getenv("CORS_ALLOW_ALL_ORIGINS", "")
 if cors_allow_all:
     CORS_ALLOW_ALL_ORIGINS = cors_allow_all.strip().lower() in ("1", "true", "yes")
