@@ -33,7 +33,9 @@ DEBUG = os.getenv("DJANGO_DEBUG", "true").strip().lower() in ("1", "true", "yes"
 
 APPEND_SLASH = True
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", ".onrender.com").split(",")
+ALLOWED_HOSTS = [
+    host.strip() for host in os.environ.get("ALLOWED_HOSTS", ".onrender.com,localhost,127.0.0.1").split(",") if host.strip()
+]
 
 
 # Application definition
