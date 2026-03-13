@@ -78,6 +78,24 @@ class UserProgress(models.Model):
 
 # --- End Content Models ---
 
+class QuizAttempt(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    score = models.IntegerField()
+    total_questions = models.IntegerField()
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'quiz')
+
+class QuestionAttempt(models.Model):
+    attempt = models.ForeignKey('QuizAttempt', on_delete=models.CASCADE)
+    question = models.ForeignKey('Question', on_delete=models.CASCADE)
+    selected_option = models.IntegerField()
+    is_correct = models.BooleanField()
+
+# --- End Quiz Models ---
+
 class Progress(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     topic = models.CharField(max_length=255, db_index=True)

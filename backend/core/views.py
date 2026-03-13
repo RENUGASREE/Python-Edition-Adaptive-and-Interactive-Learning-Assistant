@@ -1,5 +1,5 @@
 from django.contrib.auth import authenticate, login, logout
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, QuestionAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -532,8 +532,10 @@ class LessonViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         lesson = Lesson.objects.filter(id=kwargs.get("pk")).first()
         if not lesson:
+            logger.warning(f"Lesson not found: {kwargs.get('pk')}")
             return Response({"message": "Lesson not found"}, status=status.HTTP_404_NOT_FOUND)
         if not _lesson_unlocked(request.user, lesson):
+            logger.info(f"Lesson not unlocked for user {request.user.id}: {lesson.id}")
             return Response({"message": "You need to complete the placement quiz to personalize your learning path."}, status=status.HTTP_403_FORBIDDEN)
         try:
             has_quiz = Quiz.objects.filter(lesson_id=lesson.id).exists()
@@ -552,8 +554,9 @@ class LessonViewSet(viewsets.ModelViewSet):
                                 text=text,
                                 defaults={"type": "mcq", "options": options_arr, "points": 1},
                             )
-        except Exception:
-            pass
+                    logger.info(f"Generated quiz for lesson {lesson.id}")
+        except Exception as e:
+            logger.error(f"Error generating quiz for lesson {lesson.id}: {e}")
         serializer = self.get_serializer(lesson)
         return Response(serializer.data)
 
@@ -959,6 +962,76 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
             log_assessment_interaction(request.user, topic, bool(correct), float(time_spent or 0), int(hints_used or 0), "quiz")
         analyze_user_skill_gaps(request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class SubmitQuizView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request, quiz_id):
+        logger.info(f"User {request.user.id} submitting quiz {quiz_id}")
+        try:
+            quiz = Quiz.objects.get(id=quiz_id)
+        except Quiz.DoesNotExist:
+            logger.warning(f"Quiz not found: {quiz_id}")
+            return Response({"message": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        answers = request.data.get("answers", [])
+        if not answers:
+            logger.warning(f"No answers provided for quiz {quiz_id}")
+            return Response({"message": "No answers provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if user already attempted this quiz
+        existing_attempt = QuizAttempt.objects.filter(user=request.user, quiz=quiz).first()
+        if existing_attempt:
+            logger.info(f"User {request.user.id} already attempted quiz {quiz_id}")
+            return Response({"message": "Quiz already attempted"}, status=status.HTTP_400_BAD_REQUEST)
+
+        questions = Question.objects.filter(quiz_id=quiz.id)
+        question_map = {q.id: q for q in questions}
+        score = 0
+        total_questions = len(questions)
+
+        # Create QuizAttempt
+        attempt = QuizAttempt.objects.create(
+            user=request.user,
+            quiz=quiz,
+            score=0,  # Will update after calculating
+            total_questions=total_questions
+        )
+        logger.info(f"Created quiz attempt {attempt.id} for user {request.user.id}")
+
+        # Process answers
+        for answer in answers:
+            q_id = answer.get("question_id")
+            selected = answer.get("selected")
+            if q_id in question_map:
+                question = question_map[q_id]
+                options = question.options or []
+                is_correct = False
+                if isinstance(options, list) and 0 <= selected < len(options):
+                    is_correct = options[selected].get("correct", False)
+                if is_correct:
+                    score += 1
+                QuestionAttempt.objects.create(
+                    attempt=attempt,
+                    question=question,
+                    selected_option=selected,
+                    is_correct=is_correct
+                )
+
+        # Update score
+        attempt.score = score
+        attempt.save()
+        logger.info(f"Quiz attempt {attempt.id} completed with score {score}/{total_questions}")
+
+        # Analyze skill gaps
+        analyze_user_skill_gaps(request.user)
+
+        return Response({
+            "score": score,
+            "total": total_questions,
+            "percentage": round((score / total_questions) * 100, 2) if total_questions > 0 else 0
+        })
 
 
 class ChatMessageViewSet(viewsets.ModelViewSet):

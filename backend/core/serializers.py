@@ -221,7 +221,17 @@ class LessonSerializer(serializers.ModelSerializer):
 
     def get_quizzes(self, obj):
         quizzes = Quiz.objects.filter(lesson_id=obj.id)
-        return QuizSerializer(quizzes, many=True).data
+        quiz_data = []
+        for quiz in quizzes:
+            attempt = QuizAttempt.objects.filter(user=self.context['request'].user, quiz=quiz).first()
+            quiz_data.append({
+                "id": quiz.id,
+                "title": quiz.title,
+                "attempted": attempt is not None,
+                "score": attempt.score if attempt else None,
+                "total_questions": attempt.total_questions if attempt else None,
+            })
+        return quiz_data
 
     def get_challenges(self, obj):
         challenges = Challenge.objects.filter(lesson_id=obj.id)
@@ -382,11 +392,6 @@ class DiagnosticAttemptSerializer(serializers.ModelSerializer):
 class DiagnosticQuestionMetaSerializer(serializers.ModelSerializer):
     class Meta:
         model = DiagnosticQuestionMeta
-        fields = '__all__'
-
-class QuizAttemptSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = QuizAttempt
         fields = '__all__'
 
 class QuizAttemptSerializer(serializers.ModelSerializer):

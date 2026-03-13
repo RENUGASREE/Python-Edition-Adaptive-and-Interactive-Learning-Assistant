@@ -2,7 +2,7 @@ import logging
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .services import mastery_progression, learning_gain, strongest_weakest_topics, engagement_index, risk_score, interaction_mastery_series
+from .analytics_services import mastery_progression, learning_gain, strongest_weakest_topics, engagement_index, risk_score, interaction_mastery_series
 from .models import SkillGapAnalysis, LearningPlan
 from .services.skill_analysis import analyze_user_skill_gaps
 

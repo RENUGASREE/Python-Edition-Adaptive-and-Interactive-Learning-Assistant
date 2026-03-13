@@ -19,8 +19,8 @@ export default function App(){
 
   const fetchUserProfile = async () => {
     try {
-      const response = await api.get('/profile/');
-      setUsername(response.data.display_name);
+      const response = await api.get('/auth/user');
+      setUsername(response.data.display_name || response.data.username);
     } catch (error) {
       console.error("Failed to fetch user profile:", error);
       // Handle error, e.g., logout user if token is invalid

@@ -4,7 +4,7 @@ from django.db import transaction
 from assessments.models import AssessmentInteraction
 from lessons.models import LessonProfile
 from core.models import Lesson, Module, User
-from .models import SkillGapAnalysis, LearningPlan
+from ..models import SkillGapAnalysis, LearningPlan
 
 
 def _categorize(acc: float) -> str:

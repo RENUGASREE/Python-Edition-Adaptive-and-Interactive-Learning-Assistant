@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, QuestionAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserProgress, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
 from .models import CertificateTemplate
 
 @admin.register(User)
@@ -29,15 +29,17 @@ class ProgressAdmin(admin.ModelAdmin):
 
 @admin.register(QuizAttempt)
 class QuizAttemptAdmin(admin.ModelAdmin):
-    list_display = ('user', 'score', 'created_at')
-    list_filter = ('created_at',)
-    search_fields = ('user__username', 'score')
-    raw_id_fields = ('user',)
-    fieldsets = (
-        (None, {'fields': ('user', 'score', 'notes')}),
-        ('Timestamps', {'fields': ('created_at',)}),
-    )
-    readonly_fields = ('created_at',)
+    list_display = ('user', 'quiz', 'score', 'total_questions', 'completed_at')
+    list_filter = ('completed_at',)
+    search_fields = ('user__username', 'quiz__title')
+    raw_id_fields = ('user', 'quiz')
+
+@admin.register(QuestionAttempt)
+class QuestionAttemptAdmin(admin.ModelAdmin):
+    list_display = ('attempt', 'question', 'selected_option', 'is_correct')
+    list_filter = ('is_correct',)
+    search_fields = ('attempt__user__username', 'question__text')
+    raw_id_fields = ('attempt', 'question')
 
 @admin.register(Badge)
 class BadgeAdmin(admin.ModelAdmin):

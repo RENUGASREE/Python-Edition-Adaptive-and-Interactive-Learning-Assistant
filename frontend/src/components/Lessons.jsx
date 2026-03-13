@@ -1,22 +1,53 @@
 import React, { useEffect, useState } from 'react'
-import { recommend } from '../api'
-import { BookOpen, Play, Clock, Zap } from 'lucide-react'
+import api from '../api'
+import { BookOpen, Play, Clock, Zap, ArrowLeft, CheckCircle, XCircle } from 'lucide-react'
 
 export default function Lessons(){
-  const [recs, setRecs] = useState([])
+  const [modules, setModules] = useState([])
+  const [selectedLesson, setSelectedLesson] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [lessonLoading, setLessonLoading] = useState(false)
 
   useEffect(()=>{
-    setLoading(true)
-    recommend(1).then(r=>setRecs(r)).catch(()=>{}).finally(()=>setLoading(false))
+    fetchModules()
   },[])
 
-  const lessons = [
-    { id: 1, title: 'Python Basics', duration: '2h 30m', level: 'Beginner', progress: 100, image: '📚' },
-    { id: 2, title: 'Data Types & Variables', duration: '1h 45m', level: 'Beginner', progress: 80, image: '📦' },
-    { id: 3, title: 'Control Flow', duration: '2h', level: 'Beginner', progress: 60, image: '🔀' },
-    { id: 4, title: 'Functions & Modules', duration: '2h 15m', level: 'Intermediate', progress: 40, image: '🔧' },
-  ]
+  const fetchModules = async () => {
+    try {
+      const response = await api.get('/modules')
+      setModules(response.data)
+    } catch (error) {
+      console.error('Failed to fetch modules:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchLesson = async (lessonId) => {
+    setLessonLoading(true)
+    try {
+      const response = await api.get(`/lessons/${lessonId}`)
+      setSelectedLesson(response.data)
+    } catch (error) {
+      console.error('Failed to fetch lesson:', error)
+    } finally {
+      setLessonLoading(false)
+    }
+  }
+
+  const submitQuiz = async (quizId, answers) => {
+    try {
+      const response = await api.post(`/quizzes/${quizId}/submit`, { answers })
+      return response.data
+    } catch (error) {
+      console.error('Failed to submit quiz:', error)
+      throw error
+    }
+  }
+
+  if (selectedLesson) {
+    return <LessonDetail lesson={selectedLesson} onBack={() => setSelectedLesson(null)} onSubmitQuiz={submitQuiz} loading={lessonLoading} />
+  }
 
   return (
     <div className="min-h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-8">
@@ -26,48 +57,113 @@ export default function Lessons(){
           <p className="text-gray-400">Personalized lessons tailored to your learning pace</p>
         </div>
 
-        {/* Recommended Section */}
-        {recs.length > 0 && (
-          <div className="glass p-6 rounded-xl mb-8">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Zap size={20} className="text-yellow-400" /> Recommended for You
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {recs.map((r, idx)=>(
-                <div key={idx} className="p-4 bg-white bg-opacity-5 rounded-lg border border-yellow-500 border-opacity-30 hover:bg-opacity-10 transition-all">
-                  <p className="text-yellow-400 font-semibold">{r.title}</p>
-                  <p className="text-gray-400 text-sm mt-1">{r.reason}</p>
+        {loading ? (
+          <div className="text-center text-white">Loading modules...</div>
+        ) : (
+          <div className="space-y-8">
+            {modules.map(module => (
+              <div key={module.id} className="glass p-6 rounded-xl">
+                <h3 className="text-2xl font-bold text-white mb-4">{module.title}</h3>
+                <p className="text-gray-400 mb-4">{module.description}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Assuming lessons are in module.lessons */}
+                  {module.lessons?.map(lesson => (
+                    <div key={lesson.id} className="p-4 bg-white bg-opacity-5 rounded-lg hover:bg-opacity-10 transition-all cursor-pointer" onClick={() => fetchLesson(lesson.id)}>
+                      <h4 className="text-white font-semibold">{lesson.title}</h4>
+                      <p className="text-gray-400 text-sm">{lesson.difficulty}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LessonDetail({ lesson, onBack, onSubmitQuiz, loading }) {
+  const [quizAnswers, setQuizAnswers] = useState({})
+  const [quizResult, setQuizResult] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleQuizSubmit = async () => {
+    if (!lesson.quizzes || lesson.quizzes.length === 0) return
+    
+    const quiz = lesson.quizzes[0]
+    if (quiz.attempted) return
+
+    const answers = Object.entries(quizAnswers).map(([qId, selected]) => ({
+      question_id: parseInt(qId),
+      selected: parseInt(selected)
+    }))
+
+    setSubmitting(true)
+    try {
+      const result = await onSubmitQuiz(quiz.id, answers)
+      setQuizResult(result)
+    } catch (error) {
+      console.error('Quiz submission failed:', error)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-8">
+        <div className="max-w-4xl mx-auto text-center text-white">Loading lesson...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-8">
+      <div className="max-w-4xl mx-auto">
+        <button onClick={onBack} className="btn-ghost mb-6 flex items-center gap-2">
+          <ArrowLeft size={20} /> Back to Modules
+        </button>
+
+        <div className="glass p-8 rounded-xl">
+          <h2 className="text-3xl font-bold text-white mb-4">{lesson.title}</h2>
+          <div className="prose prose-invert max-w-none mb-8" dangerouslySetInnerHTML={{ __html: lesson.content }} />
+
+          {lesson.quizzes && lesson.quizzes.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-xl font-bold text-white mb-4">Lesson Quiz</h3>
+              {lesson.quizzes.map(quiz => (
+                <div key={quiz.id} className="bg-white bg-opacity-5 p-6 rounded-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-cyan-400 font-semibold">AI Generated Quiz</span>
+                  </div>
+                  
+                  {quiz.attempted ? (
+                    <div className="text-center">
+                      <p className="text-white text-lg">Your Score: {quiz.score} / {quiz.total_questions}</p>
+                    </div>
+                  ) : quizResult ? (
+                    <div className="text-center">
+                      <p className="text-white text-lg">Your Score: {quizResult.score} / {quizResult.total}</p>
+                      <p className="text-gray-400">Percentage: {quizResult.percentage}%</p>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Quiz questions would be rendered here */}
+                      <p className="text-gray-400 mb-4">Quiz questions not implemented in frontend yet.</p>
+                      <button 
+                        onClick={handleQuizSubmit} 
+                        disabled={submitting}
+                        className="btn-primary"
+                      >
+                        {submitting ? 'Submitting...' : 'Submit Quiz'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Lessons Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {lessons.map((lesson, idx) => (
-            <div key={lesson.id} className="group cursor-pointer animate-slideIn" style={{ animationDelay: `${idx * 100}ms` }}>
-              <div className="glass p-0 overflow-hidden rounded-xl transition-all duration-300 hover:scale-105 hover:bg-opacity-20">
-                <div className="bg-gradient-to-br from-blue-500 to-cyan-500 h-32 flex items-center justify-center text-5xl group-hover:scale-110 transition-transform duration-300">
-                  {lesson.image}
-                </div>
-                <div className="p-4">
-                  <h4 className="text-white font-bold group-hover:text-cyan-400 transition-colors">{lesson.title}</h4>
-                  <p className="text-gray-400 text-xs mt-1">{lesson.level}</p>
-                  <div className="mt-3 space-y-2">
-                    <div className="w-full bg-gray-700 rounded-full h-1.5">
-                      <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-1.5 rounded-full" style={{ width: `${lesson.progress}%` }}></div>
-                    </div>
-                    <p className="text-gray-400 text-xs">{lesson.progress}% Complete</p>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-400 text-xs mt-3">
-                    <Clock size={14} /> {lesson.duration}
-                  </div>
-                  <button className="btn-primary w-full mt-4">Continue</button>
-                </div>
-              </div>
-            </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
