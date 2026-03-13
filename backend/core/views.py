@@ -158,10 +158,12 @@ def _prerequisites_met(user, lesson_id: int) -> bool:
     return all(pid in completed_ids for pid in prereq_ids)
 
 def _module_unlocked(user, module):
-    if not _quiz_completed(user):
-        return False
+    # Allow access to the first module for new users even if they haven't completed the placement quiz yet.
+    # This prevents the app from appearing empty on first login.
     if module.order == 1:
         return True
+    if not _quiz_completed(user):
+        return False
     previous_module = Module.objects.filter(order=module.order - 1).first()
     if not previous_module:
         return True
