@@ -9,7 +9,8 @@ def seed_curriculum(apps, schema_editor):
     Question = apps.get_model("core", "Question")
     Challenge = apps.get_model("core", "Challenge")
 
-    if Module.objects.exists():
+    # If lessons already exist, assume curriculum is populated enough
+    if Lesson.objects.exists():
         return
 
     modules = [
@@ -63,43 +64,52 @@ def seed_curriculum(apps, schema_editor):
     with transaction.atomic():
         module_map = {}
         for order, title, desc in modules:
-            module = Module.objects.create(order=order, title=title, description=desc, image_url=None)
+            module, _ = Module.objects.get_or_create(
+                order=order,
+                defaults={"title": title, "description": desc, "image_url": None},
+            )
             module_map[order] = module
 
         for m_order, lessons in lessons_by_module.items():
             module = module_map[m_order]
             for idx, (title, slug_seed, code) in enumerate(lessons, start=1):
                 slug = slugify(slug_seed)[:200]
-                Lesson.objects.create(
+                Lesson.objects.get_or_create(
                     module_id=module.id,
-                    title=title,
                     slug=slug,
-                    content=f"### {title}\n\n```python\n{code}\n```",
-                    order=idx,
-                    difficulty="Beginner",
-                    duration=20,
+                    defaults={
+                        "title": title,
+                        "content": f"### {title}\n\n```python\n{code}\n```",
+                        "order": idx,
+                        "difficulty": "Beginner",
+                        "duration": 20,
+                    },
                 )
 
         # Optional: minimal quizzes/challenges for first module
         first = module_map[1]
         first_lessons = list(Lesson.objects.filter(module_id=first.id).order_by("order")[:2])
         for lesson in first_lessons:
-            quiz = Quiz.objects.create(lesson_id=lesson.id, title=f"Quick Check: {lesson.title}")
-            Question.objects.create(
+            quiz, _ = Quiz.objects.get_or_create(lesson_id=lesson.id, title=f"Quick Check: {lesson.title}")
+            Question.objects.get_or_create(
                 quiz_id=quiz.id,
                 text="What is the output of print(1+1)?",
-                type="mcq",
-                options=[{"text": "2", "correct": True}, {"text": "11", "correct": False}],
-                points=1,
+                defaults={
+                    "type": "mcq",
+                    "options": [{"text": "2", "correct": True}, {"text": "11", "correct": False}],
+                    "points": 1,
+                },
             )
-            Challenge.objects.create(
+            Challenge.objects.get_or_create(
                 lesson_id=lesson.id,
                 title="Echo Input",
-                description="Read a line and echo it.",
-                initial_code="def solve():\n    s = input().strip()\n    print(s)\n\nif __name__ == '__main__':\n    solve()",
-                solution_code="def solve():\n    s = input().strip()\n    print(s)\n\nif __name__ == '__main__':\n    solve()",
-                test_cases=[{"input": "hello", "expected": "hello"}],
-                points=5,
+                defaults={
+                    "description": "Read a line and echo it.",
+                    "initial_code": "def solve():\n    s = input().strip()\n    print(s)\n\nif __name__ == '__main__':\n    solve()",
+                    "solution_code": "def solve():\n    s = input().strip()\n    print(s)\n\nif __name__ == '__main__':\n    solve()",
+                    "test_cases": [{"input": "hello", "expected": "hello"}],
+                    "points": 5,
+                },
             )
 
 
@@ -112,4 +122,3 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(seed_curriculum),
     ]
-
