@@ -23,6 +23,7 @@ export function Navbar() {
         { href: "/curriculum", label: "Curriculum" },
         { href: "/achievements", label: "Achievements" },
         { href: "/analytics", label: "Analytics" },
+        { href: "/challenges", label: "Challenges" },
       ]
     : [
         { href: "/", label: "Home" },

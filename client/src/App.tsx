@@ -21,6 +21,7 @@ import PlacementQuiz from "@/pages/PlacementQuiz";
 import ModuleQuiz from "@/pages/ModuleQuiz";
 import Certificate from "@/pages/Certificate";
 import Analytics from "@/pages/Analytics";
+import Challenges from "@/pages/Challenges";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -125,6 +126,10 @@ function Router() {
 
       <Route path="/analytics">
         <ProtectedRoute component={Analytics} />
+      </Route>
+
+      <Route path="/challenges">
+        <ProtectedRoute component={Challenges} />
       </Route>
 
       <Route component={NotFound} />

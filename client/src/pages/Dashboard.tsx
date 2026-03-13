@@ -40,6 +40,30 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [gateOpen, setGateOpen] = useState(false);
   const [gateMessage, setGateMessage] = useState<string | null>(null);
+  const { data: skillGaps } = useQuery({
+    queryKey: ["/api/skill-gaps"],
+    queryFn: async () => {
+      const accessToken = localStorage.getItem("access_token");
+      const res = await fetch(apiUrl("/skill-gaps/"), {
+        credentials: "include",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      if (!res.ok) throw new Error("Failed to fetch skill gaps");
+      return res.json() as Promise<{ weak: string[]; improving: string[]; strong: string[]; all: any[] }>;
+    },
+  });
+  const { data: plan } = useQuery({
+    queryKey: ["/api/learning-plan"],
+    queryFn: async () => {
+      const accessToken = localStorage.getItem("access_token");
+      const res = await fetch(apiUrl("/learning-plan/"), {
+        credentials: "include",
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      if (!res.ok) throw new Error("Failed to fetch plan");
+      return res.json() as Promise<{ recommendedModules: number[]; recommendedLessons: number[]; reasoning: string }>;
+    },
+  });
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
     queryKey: ["/api/quiz-attempts"],
     queryFn: async () => {
@@ -360,6 +384,47 @@ export default function Dashboard() {
 
         {/* Progress & Modules */}
         <div className="grid lg:grid-cols-2 gap-8">
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <h3 className="text-lg font-bold mb-4">Skill Gap Analysis</h3>
+            <div className="grid md:grid-cols-3 gap-4">
+              <div>
+                <div className="text-sm font-medium mb-2">Weak Areas</div>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  {(skillGaps?.weak || []).map((t) => <li key={`w-${t}`}>{t}</li>)}
+                  {(skillGaps?.weak || []).length === 0 && <li className="opacity-60">None</li>}
+                </ul>
+              </div>
+              <div>
+                <div className="text-sm font-medium mb-2">Improving</div>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  {(skillGaps?.improving || []).map((t) => <li key={`i-${t}`}>{t}</li>)}
+                  {(skillGaps?.improving || []).length === 0 && <li className="opacity-60">None</li>}
+                </ul>
+              </div>
+              <div>
+                <div className="text-sm font-medium mb-2">Strong</div>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  {(skillGaps?.strong || []).map((t) => <li key={`s-${t}`}>{t}</li>)}
+                  {(skillGaps?.strong || []).length === 0 && <li className="opacity-60">None</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <h3 className="text-lg font-bold mb-2">Your Personalized Learning Plan</h3>
+            <div className="text-sm text-muted-foreground mb-3">{plan?.reasoning || "Complete activities to generate a plan."}</div>
+            <div className="text-sm">
+              <div className="font-medium mb-1">Recommended Next Steps</div>
+              <ul className="list-decimal pl-5 space-y-1">
+                {(plan?.recommendedLessons || []).slice(0, 5).map((id) => (
+                  <li key={`rl-${id}`}>
+                    <Link href={`/lesson/${id}`}>Lesson {id}</Link>
+                  </li>
+                ))}
+                {(plan?.recommendedLessons || []).length === 0 && <li className="text-muted-foreground">No recommendations yet</li>}
+              </ul>
+            </div>
+          </div>
           {/* Recent Activity Chart */}
           <div className="bg-card border border-border rounded-2xl p-6">
             <h3 className="text-lg font-bold mb-6">Learning Activity</h3>

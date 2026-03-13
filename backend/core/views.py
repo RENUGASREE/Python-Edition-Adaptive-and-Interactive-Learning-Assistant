@@ -14,6 +14,7 @@ from users.services import update_engagement
 from gamification.services import add_xp, update_streak, award_badge
 from evaluation.services import log_recommendation_event, mark_recommendation_accepted, mark_recommendation_completed, get_or_assign_strategy
 from recommendation.services import update_topic_velocity, update_shift_outcome, get_behavior, compute_difficulty_adjustment, log_difficulty_shift
+from analytics.services.skill_analysis import analyze_user_skill_gaps
 import subprocess
 import os
 import uuid
@@ -494,7 +495,10 @@ class RunChallengeView(APIView):
                 'passed': False
             })
         finally:
-            pass
+            try:
+                analyze_user_skill_gaps(request.user)
+            except Exception:
+                pass
 
 
 class ModuleViewSet(viewsets.ModelViewSet):
@@ -933,6 +937,7 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         hints_used = request.data.get("hintsUsed", 0)
         if topic is not None and correct is not None:
             log_assessment_interaction(request.user, topic, bool(correct), float(time_spent or 0), int(hints_used or 0), "quiz")
+        analyze_user_skill_gaps(request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 

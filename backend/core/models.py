@@ -60,6 +60,7 @@ class Challenge(models.Model):
     solution_code = models.TextField(blank=True, null=True)
     test_cases = models.JSONField()
     points = models.IntegerField(blank=True, null=True)
+    difficulty = models.TextField(blank=True, null=True)
 
     class Meta:
         db_table = 'challenges'

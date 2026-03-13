@@ -41,6 +41,7 @@ export function Layout({ children }: LayoutProps) {
     { href: "/curriculum", label: "Curriculum", icon: BookOpen },
     { href: "/achievements", label: "Achievements", icon: Trophy },
     { href: "/analytics", label: "Analytics", icon: BrainCircuit },
+    { href: "/challenges", label: "Challenges", icon: BrainCircuit },
   ];
 
   return (

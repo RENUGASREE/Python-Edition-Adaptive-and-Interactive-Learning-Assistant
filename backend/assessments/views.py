@@ -5,6 +5,7 @@ from django.utils import timezone
 from .serializers import DiagnosticQuizSerializer, DiagnosticQuestionSerializer
 from .models import DiagnosticQuiz, DiagnosticQuestion, DiagnosticQuizAttempt
 from .services import score_diagnostic
+from analytics.services.skill_analysis import analyze_user_skill_gaps
 
 
 class DiagnosticQuizView(APIView):
@@ -76,6 +77,7 @@ class DiagnosticSubmitView(APIView):
         attempt.locked = True
         attempt.status = status_value
         attempt.save(update_fields=["module_scores", "overall_score", "raw_score", "weighted_score", "difficulty_tier", "completed_at", "locked", "status", "violation_count"])
+        analyze_user_skill_gaps(request.user)
         return Response({
             "moduleScores": module_scores,
             "overallScore": raw_score,
@@ -148,4 +150,5 @@ class DiagnosticCancelView(APIView):
         attempt.completed_at = now
         attempt.locked = True
         attempt.save(update_fields=["status", "completed_at", "locked"])
+        analyze_user_skill_gaps(request.user)
         return Response({"message": "Cancelled"})
