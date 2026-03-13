@@ -8,7 +8,7 @@ import { Loader2, Flame, Award, Clock } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useMemo, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -33,7 +33,7 @@ import {
 export default function Dashboard() {
   const { user } = useAuth();
   const { data: progress, isLoading: loadingProgress } = useProgress();
-  const { data: modules, isLoading: loadingModules } = useModules();
+  const { data: modules, isLoading: loadingModules, error: modulesError, refetch: refetchModules } = useModules();
   const { masteryVector, isLoading: loadingMastery } = useMastery();
   const { recommendation, isLoading: loadingRecommendation } = useRecommendation();
   const { toast } = useToast();
@@ -43,7 +43,7 @@ export default function Dashboard() {
   const { data: skillGaps } = useQuery({
     queryKey: ["/api/skill-gaps"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/skill-gaps/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -55,7 +55,7 @@ export default function Dashboard() {
   const { data: plan } = useQuery({
     queryKey: ["/api/learning-plan"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/learning-plan/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -67,7 +67,7 @@ export default function Dashboard() {
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
     queryKey: ["/api/quiz-attempts"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/quiz-attempts/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -127,10 +127,50 @@ export default function Dashboard() {
     );
   }
   if (!modules) {
+    const status = (modulesError as any)?.status;
+    const message = (modulesError as any)?.message || "Unable to load data";
+    let title = "Unable to load data";
+    let description = "Please refresh the page.";
+    let action = (
+      <button
+        onClick={() => refetchModules()}
+        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+      >
+        Retry
+      </button>
+    );
+
+    if (status === 401) {
+      title = "Authentication required";
+      description = "Please sign in to continue.";
+      action = (
+        <button
+          onClick={() => (window.location.href = "/login")}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+        >
+          Sign in
+        </button>
+      );
+    } else if (status === 403) {
+      title = "Placement test required";
+      description = "Complete the placement quiz to unlock your dashboard.";
+      action = (
+        <button
+          onClick={() => (window.location.href = "/placement-quiz")}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+        >
+          Take placement test
+        </button>
+      );
+    }
+
     return (
       <Layout>
         <div className="max-w-xl mx-auto py-16 px-4 text-center">
-          <h1 className="text-2xl font-bold">Unable to load data. Please refresh.</h1>
+          <h1 className="text-2xl font-bold">{title}</h1>
+          <p className="text-muted-foreground mt-2">{description}</p>
+          <p className="text-xs text-muted-foreground mt-1">{message}</p>
+          <div className="mt-4">{action}</div>
         </div>
       </Layout>
     );

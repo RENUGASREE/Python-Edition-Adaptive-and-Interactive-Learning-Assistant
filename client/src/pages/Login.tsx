@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, clearTokens, storeTokens } from "@/lib/api";
 
 export default function Login() {
   const { user, isLoading } = useAuth();
@@ -76,16 +76,16 @@ export default function Login() {
       
       // Store JWT tokens if login/register was successful
       if (data.access && data.refresh) {
-        localStorage.setItem('access_token', data.access);
-        localStorage.setItem('refresh_token', data.refresh);
-        
+        storeTokens(data.access, data.refresh);
+
         // Force refetch user data to update UI immediately
         await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       }
-      
+
       // Use window.location.href to force a full reload and state reset
       window.location.href = "/dashboard";
     } catch (e: any) {
+      clearTokens();
       const message =
         e?.name === "AbortError"
           ? "Request timed out. The backend may be starting up. Please try again."

@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 import { Link, useLocation, useParams } from "wouter";
 import { Loader2 } from "lucide-react";
 import {
@@ -32,7 +32,7 @@ export default function ModuleQuiz() {
   const { data: quizAttempts, isLoading: loadingAttempts, refetch } = useQuery({
     queryKey: ["/api/quiz-attempts"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/quiz-attempts/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -137,7 +137,7 @@ export default function ModuleQuiz() {
 
     try {
       setSubmitting(true);
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/quiz-attempts/"), {
         method: "POST",
         headers: {

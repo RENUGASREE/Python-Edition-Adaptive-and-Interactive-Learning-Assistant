@@ -1,6 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { useQuery } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 import { useState } from "react";
 import { useRunChallenge } from "@/hooks/use-lessons";
 import { Loader2 } from "lucide-react";
@@ -18,7 +18,7 @@ export default function Challenges() {
   const { data, isLoading } = useQuery({
     queryKey: ["/api/challenges"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/challenges/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,

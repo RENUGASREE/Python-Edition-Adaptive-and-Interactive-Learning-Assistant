@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@shared/models/auth";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken, getRefreshToken, storeTokens, clearTokens } from "@/lib/api";
 
 async function fetchUser(): Promise<User | null> {
-  const accessToken = localStorage.getItem('access_token');
-  const refreshToken = localStorage.getItem('refresh_token');
+  const accessToken = getAccessToken();
+  const refreshToken = getRefreshToken();
   
   if (!accessToken) {
     return null;
@@ -32,12 +32,11 @@ async function fetchUser(): Promise<User | null> {
     if (refreshResponse.ok) {
       const data = await refreshResponse.json();
       if (data?.access) {
-        localStorage.setItem('access_token', data.access);
+        storeTokens(data.access, data.refresh ?? refreshToken);
         response = await attemptFetch(data.access);
       }
     } else {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      clearTokens();
       return null;
     }
   }
@@ -61,8 +60,7 @@ async function logout(): Promise<void> {
     console.error("Logout error:", error);
   } finally {
     // Always clear local tokens
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+    clearTokens();
   }
 }
 

@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { useModules } from "@/hooks/use-modules";
 import { useQuery } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 import { useMemo } from "react";
 import { Link, useParams } from "wouter";
 import { Loader2 } from "lucide-react";
@@ -17,7 +17,7 @@ export default function Certificate() {
   const { data: certificates, isLoading: loadingCertificates } = useQuery({
     queryKey: ["/api/certificates"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/certificates/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,

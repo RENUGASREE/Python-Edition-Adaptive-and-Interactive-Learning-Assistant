@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 
 type Recommendation = {
@@ -41,7 +41,7 @@ export function AdaptiveProvider({ children }: { children: React.ReactNode }) {
   const { data: recommendation, isLoading: loadingRecommendation } = useQuery({
     queryKey: ["/api/recommend-next"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/recommend-next"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -55,7 +55,7 @@ export function AdaptiveProvider({ children }: { children: React.ReactNode }) {
   const { data: analytics, isLoading: loadingAnalytics } = useQuery({
     queryKey: ["/api/analytics"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/analytics"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -69,7 +69,7 @@ export function AdaptiveProvider({ children }: { children: React.ReactNode }) {
   const { data: metrics, isLoading: loadingMetrics } = useQuery({
     queryKey: ["/api/metrics"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/metrics"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,

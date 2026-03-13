@@ -11,7 +11,7 @@ import { useState, useEffect, useMemo, Suspense, lazy } from "react";
 import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 import { useModules } from "@/hooks/use-modules";
 import { Layout } from "@/components/Layout";
 
@@ -20,12 +20,12 @@ const ChatTutor = lazy(() => import("@/components/ChatTutor").then((mod) => ({ d
 export default function LessonView() {
   const { id } = useParams();
   const lessonId = Number(id);
-  const { data: lesson, isLoading } = useLesson(lessonId);
+  const { data: lesson, isLoading, error, refetch } = useLesson(lessonId);
   const { data: modules, isLoading: loadingModules } = useModules();
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
     queryKey: ["/api/quiz-attempts"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/quiz-attempts/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -210,16 +210,56 @@ export default function LessonView() {
       </div>
     );
   }
+  const lessonErrorStatus = (error as any)?.status;
+  const lessonErrorMessage = (error as any)?.message || "Unable to load lesson content";
+
   if (!lesson) {
+    let title = "Unable to load lesson content";
+    let description = "Please try again.";
+    let action: React.ReactNode = (
+      <button
+        onClick={() => refetch()}
+        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+      >
+        Retry
+      </button>
+    );
+
+    if (lessonErrorStatus === 401) {
+      title = "Authentication required";
+      description = "Please sign in to access lessons.";
+      action = (
+        <button
+          onClick={() => (window.location.href = "/login")}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+        >
+          Go to login
+        </button>
+      );
+    } else if (lessonErrorStatus === 403) {
+      title = "Placement quiz required";
+      description = "Complete the placement test to unlock this lesson.";
+      action = (
+        <button
+          onClick={() => (window.location.href = "/placement-quiz")}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+        >
+          Take the placement quiz
+        </button>
+      );
+    } else if (lessonErrorStatus === 404) {
+      title = "Lesson not found";
+      description = "This lesson may have been removed or does not exist.";
+    }
+
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[70vh] px-4">
           <div className="max-w-lg w-full bg-card border border-border rounded-2xl p-8 text-center space-y-4">
-            <h1 className="text-2xl font-bold">Unable to load lesson content</h1>
-            <p className="text-muted-foreground">Please try again.</p>
-            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg">
-              Retry
-            </button>
+            <h1 className="text-2xl font-bold">{title}</h1>
+            <p className="text-muted-foreground">{description}</p>
+            <p className="text-xs text-muted-foreground">{lessonErrorMessage}</p>
+            {action}
           </div>
         </div>
       </Layout>

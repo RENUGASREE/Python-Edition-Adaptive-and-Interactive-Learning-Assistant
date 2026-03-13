@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -44,7 +44,7 @@ export function useChat(context?: TutorContext) {
     setMessages((prev) => [...prev, { role: "user", content }]);
 
     try {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const response = await fetch(apiUrl("/ai-tutor"), {
         method: "POST",
         headers: {

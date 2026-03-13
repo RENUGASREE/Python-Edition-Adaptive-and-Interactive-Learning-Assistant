@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, login, logout
 from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
 from rest_framework import generics, permissions, viewsets, status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import UserSerializer, ProgressSerializer, QuizAttemptSerializer, BadgeSerializer, CertificateSerializer, RecommendationSerializer, ChatMessageSerializer, ModuleSerializer, LessonSerializer, UserProgressSerializer, QuizSerializer, QuestionSerializer, ChallengeSerializer, UserMasterySerializer, DiagnosticAttemptSerializer, DiagnosticQuestionMetaSerializer
@@ -525,7 +526,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
 class LessonViewSet(viewsets.ModelViewSet):
     queryset = Lesson.objects.all().order_by('order')
     serializer_class = LessonSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
         unlocked_ids = _unlocked_lesson_ids(self.request.user)

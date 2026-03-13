@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Layout } from "@/components/Layout";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 
 const iconMap: Record<string, any> = {
   Star,
@@ -22,7 +22,7 @@ export default function Achievements() {
   const { data: summary } = useQuery({
     queryKey: ["/api/gamification/summary"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/gamification/summary"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,

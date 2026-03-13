@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 import { Link, useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import {
@@ -44,7 +44,7 @@ export default function PlacementQuiz() {
   const { data: diagnostic, isLoading: loadingAttempts } = useQuery({
     queryKey: ["/api/diagnostic"],
     queryFn: async () => {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/diagnostic"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
@@ -71,7 +71,6 @@ export default function PlacementQuiz() {
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const accessToken = localStorage.getItem("access_token");
         const meta = diagnostic?.attemptMeta;
         if (meta?.attemptId) {
           setAttemptId(Number(meta.attemptId));
@@ -203,7 +202,7 @@ export default function PlacementQuiz() {
 
     try {
       setSubmitting(true);
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/diagnostic/submit"), {
         method: "POST",
         headers: {
@@ -242,7 +241,7 @@ export default function PlacementQuiz() {
   const startTest = async () => {
     setError(null);
     try {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       const res = await fetch(apiUrl("/diagnostic/start"), {
         method: "POST",
         headers: {
@@ -268,7 +267,7 @@ export default function PlacementQuiz() {
 
   const cancelAttempt = async () => {
     try {
-      const accessToken = localStorage.getItem("access_token");
+      const accessToken = getAccessToken();
       await fetch(apiUrl("/diagnostic/cancel"), {
         method: "POST",
         headers: {

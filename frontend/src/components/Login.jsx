@@ -24,9 +24,12 @@ export default function Login({ onLoginSuccess, onSwitchToSignup }) {
       const refreshToken = response.data.refresh;
       console.log("Login successful. Access Token:", accessToken);
       console.log("Login successful. Refresh Token:", refreshToken);
+      localStorage.setItem('access_token', accessToken);
+      localStorage.setItem('refresh_token', refreshToken);
+      // Keep legacy keys for backwards compatibility
       localStorage.setItem('token', accessToken);
       localStorage.setItem('refresh', refreshToken);
-      
+
       // Call success callback
       onLoginSuccess();
     } catch (err) {

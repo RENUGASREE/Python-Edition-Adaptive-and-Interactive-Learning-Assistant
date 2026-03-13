@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { User, Mail, Calendar, Edit3, Save, X, Camera, Award, Target } from "lucide-react";
 import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getAccessToken } from "@/lib/api";
 
 interface UpdateProfileData {
   firstName: string;
@@ -21,13 +21,13 @@ interface UpdateProfileData {
 }
 
 async function updateProfile(data: UpdateProfileData): Promise<any> {
-  const accessToken = localStorage.getItem('access_token');
-  
+  const accessToken = getAccessToken();
+
   const response = await fetch(apiUrl("/auth/user/update"), {
     method: "POST",  // Using POST to avoid CSRF issues
     headers: {
       "Content-Type": "application/json",
-      'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+      Authorization: accessToken ? `Bearer ${accessToken}` : "",
     },
     credentials: "include",
     body: JSON.stringify(data),
@@ -42,15 +42,15 @@ async function updateProfile(data: UpdateProfileData): Promise<any> {
 }
 
 async function uploadProfileImage(file: File): Promise<{ profileImageUrl: string }> {
-  const accessToken = localStorage.getItem('access_token');
-  
+  const accessToken = getAccessToken();
+
   const formData = new FormData();
   formData.append("profile_image", file);
 
   const response = await fetch(apiUrl("/auth/user/avatar"), {
     method: "POST",
     headers: {
-      'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+      Authorization: accessToken ? `Bearer ${accessToken}` : "",
     },
     credentials: "include",
     body: formData,
