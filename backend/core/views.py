@@ -15,6 +15,7 @@ from gamification.services import add_xp, update_streak, award_badge
 from evaluation.services import log_recommendation_event, mark_recommendation_accepted, mark_recommendation_completed, get_or_assign_strategy
 from recommendation.services import update_topic_velocity, update_shift_outcome, get_behavior, compute_difficulty_adjustment, log_difficulty_shift
 from analytics.services.skill_analysis import analyze_user_skill_gaps
+from core.services.ai_quiz_generator import generate_quiz_from_lesson
 import subprocess
 import os
 import uuid
@@ -534,6 +535,25 @@ class LessonViewSet(viewsets.ModelViewSet):
             return Response({"message": "Lesson not found"}, status=status.HTTP_404_NOT_FOUND)
         if not _lesson_unlocked(request.user, lesson):
             return Response({"message": "You need to complete the placement quiz to personalize your learning path."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            has_quiz = Quiz.objects.filter(lesson_id=lesson.id).exists()
+            if not has_quiz:
+                generated = generate_quiz_from_lesson(lesson)
+                if generated:
+                    quiz, _ = Quiz.objects.get_or_create(lesson_id=lesson.id, title=f"{lesson.title} Quiz (AI Generated)")
+                    for item in generated:
+                        text = item.get("question") or ""
+                        options_arr = []
+                        for idx, opt_text in enumerate(item.get("options") or []):
+                            options_arr.append({"text": opt_text, "correct": idx == int(item.get("correct", -1))})
+                        if text and options_arr:
+                            Question.objects.get_or_create(
+                                quiz_id=quiz.id,
+                                text=text,
+                                defaults={"type": "mcq", "options": options_arr, "points": 1},
+                            )
+        except Exception:
+            pass
         serializer = self.get_serializer(lesson)
         return Response(serializer.data)
 

@@ -327,6 +327,34 @@ export default function LessonView() {
                </div>
              </div>
              <ReactMarkdown>{lesson.content}</ReactMarkdown>
+            
+            {(lesson as any)?.quizzes?.length > 0 && (
+              <div className="mt-8 p-6 border border-border rounded-xl bg-card">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Lesson Quiz</h3>
+                  {String((lesson as any).quizzes?.[0]?.title || "").includes("AI Generated") && (
+                    <div className="text-xs px-2 py-1 rounded bg-accent/10 text-accent border border-accent/30">
+                      AI Generated Quiz
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 space-y-4">
+                  {((lesson as any).quizzes?.[0]?.questions || []).map((q: any, idx: number) => (
+                    <div key={`q-${idx}`} className="space-y-2">
+                      <div className="font-medium">{idx + 1}. {q.text}</div>
+                      <div className="grid gap-2">
+                        {(q.options || []).map((opt: any, i: number) => (
+                          <label key={`q-${idx}-o-${i}`} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:border-primary/60">
+                            <input type="radio" name={`ai-quiz-q-${idx}`} disabled />
+                            <span>{opt.text}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
              
              {lesson.challenges?.[0] && (
                <div className="mt-8 p-6 bg-primary/5 border border-primary/20 rounded-xl">
