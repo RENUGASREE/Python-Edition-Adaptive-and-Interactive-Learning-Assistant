@@ -5,11 +5,21 @@ import { useMastery } from "@/hooks/use-mastery";
 import { useRecommendation } from "@/hooks/use-recommendation";
 import { Layout } from "@/components/Layout";
 import { Loader2, Flame, Award, Clock } from "lucide-react";
-import { Link } from "wouter";
-import { useMemo } from "react";
+import { Link, useLocation } from "wouter";
+import { useMemo, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   BarChart,
   Bar,
@@ -27,6 +37,9 @@ export default function Dashboard() {
   const { masteryVector, isLoading: loadingMastery } = useMastery();
   const { recommendation, isLoading: loadingRecommendation } = useRecommendation();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateMessage, setGateMessage] = useState<string | null>(null);
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
     queryKey: ["/api/quiz-attempts"],
     queryFn: async () => {
@@ -171,17 +184,33 @@ export default function Dashboard() {
     { day: 'Sun', score: activityMap.get('Sun') },
   ];
 
-  // Show gate message if redirected from a locked route
-  try {
-    const msg = localStorage.getItem("quizGateMessage");
-    if (msg) {
-      toast({ title: msg });
-      localStorage.removeItem("quizGateMessage");
-    }
-  } catch {}
+  useEffect(() => {
+    try {
+      const msg = localStorage.getItem("quizGateMessage");
+      if (msg) {
+        setGateMessage(msg);
+        setGateOpen(true);
+        localStorage.removeItem("quizGateMessage");
+      }
+    } catch {}
+  }, []);
 
   return (
     <Layout>
+      <AlertDialog open={gateOpen} onOpenChange={setGateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Access Restricted</AlertDialogTitle>
+            <AlertDialogDescription>
+              {gateMessage || "Please complete the placement quiz to access this section."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setLocation("/placement-quiz")}>Take placement quiz</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="space-y-8">
         {!placementCompleted && (
           <div className="bg-card border border-primary/40 rounded-2xl p-6 shadow-lg shadow-primary/15">

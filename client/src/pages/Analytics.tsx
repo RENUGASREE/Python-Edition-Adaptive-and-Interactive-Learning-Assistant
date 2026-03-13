@@ -2,11 +2,13 @@ import { Layout } from "@/components/Layout";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { Loader2 } from "lucide-react";
 import { useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
+import { useAuth } from "@/hooks/use-auth";
 
 
 export default function Analytics() {
   const { analytics, isLoading } = useAnalytics();
+  const { user } = useAuth();
 
   const chartData = useMemo(() => {
     if (!analytics?.masteryProgression) return [];
@@ -30,6 +32,13 @@ export default function Analytics() {
 
   const engagementPercent = Math.round((analytics?.engagementIndex || 0) * 100);
   const riskPercent = Math.round((analytics?.riskScore || 0) * 100);
+  const masteryRadar = useMemo(() => {
+    const mv = (user as any)?.masteryVector || (user as any)?.mastery_vector || {};
+    return Object.entries(mv).slice(0, 8).map(([topic, score]) => ({
+      topic: String(topic),
+      value: Math.round(Number(score) * 100),
+    }));
+  }, [user]);
 
   if (isLoading) {
     return (
@@ -106,6 +115,27 @@ export default function Analytics() {
                 </ResponsiveContainer>
               )}
             </div>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-6">
+          <div className="text-sm text-muted-foreground mb-4">Skill Mastery per Topic</div>
+          <div className="h-[320px]">
+            {masteryRadar.length === 0 ? (
+              <div className="text-sm text-muted-foreground flex items-center justify-center h-full">
+                Not enough data yet
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={masteryRadar}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="topic" />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                  <Radar name="Mastery" dataKey="value" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
+                  <Tooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 

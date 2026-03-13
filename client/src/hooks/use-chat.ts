@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { apiUrl } from "@/lib/api";
 
 interface Message {
   role: "user" | "assistant";

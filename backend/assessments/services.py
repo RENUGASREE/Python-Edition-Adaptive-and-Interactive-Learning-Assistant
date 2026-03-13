@@ -15,7 +15,7 @@ def _difficulty_tier(weighted_score_pct: float) -> str:
     return "Beginner"
 
 
-def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_count: int = 0) -> Tuple[Dict, float, float, str]:
+def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_count: int = 0, update_user: bool = True) -> Tuple[Dict, float, float, str]:
     questions = list(DiagnosticQuestion.objects.filter(quiz_id=quiz_id))
     answer_map = {
         int(a["questionId"]): {
@@ -62,15 +62,16 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
     weighted = round((correct_points / total_points), 4) if total_points else 0
     tier = _difficulty_tier(weighted)
 
-    mastery_vector = user.mastery_vector or {}
-    for topic, score in module_scores.items():
-        mastery_vector[normalize_topic(topic)] = score
-    user.mastery_vector = mastery_vector
-    user.diagnostic_completed = True
-    user.has_taken_quiz = True
-    user.level = tier
-    user.save(update_fields=["mastery_vector", "diagnostic_completed", "has_taken_quiz", "level"])
-    update_engagement(user, 0.05)
+    if update_user:
+        mastery_vector = user.mastery_vector or {}
+        for topic, score in module_scores.items():
+            mastery_vector[normalize_topic(topic)] = score
+        user.mastery_vector = mastery_vector
+        user.diagnostic_completed = True
+        user.has_taken_quiz = True
+        user.level = tier
+        user.save(update_fields=["mastery_vector", "diagnostic_completed", "has_taken_quiz", "level"])
+        update_engagement(user, 0.05)
     return module_scores, raw_score, weighted, tier
 
 

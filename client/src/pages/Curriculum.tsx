@@ -155,9 +155,20 @@ export default function Curriculum() {
       <div className="max-w-5xl mx-auto space-y-12 py-8 px-4">
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-display font-bold text-foreground">Python Mastery Path</h1>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Unlock new modules and lessons as you master Python.
-          </p>
+          {!placementCompleted ? (
+            <div className="max-w-2xl mx-auto bg-card border border-primary/40 rounded-2xl p-4">
+              <p className="text-muted-foreground text-sm">
+                You must complete the placement test to unlock your personalized Python learning path.
+              </p>
+              <div className="mt-3">
+                <Button onClick={() => setLocation('/placement-quiz')}>Take Placement Test</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              Unlock new modules and lessons as you master Python.
+            </p>
+          )}
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6">

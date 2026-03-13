@@ -16,10 +16,11 @@ class UserSerializer(serializers.ModelSerializer):
     masteryVector = serializers.JSONField(source='mastery_vector', required=False)
     stats = serializers.SerializerMethodField()
     achievements = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='date_joined', read_only=True)
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'password', 'firstName', 'lastName', 'level', 'masteryVector', 'engagement_score', 'diagnostic_completed', 'has_taken_quiz', 'learning_velocity', 'stats', 'achievements')
+        fields = ('id', 'email', 'password', 'firstName', 'lastName', 'level', 'masteryVector', 'engagement_score', 'diagnostic_completed', 'has_taken_quiz', 'learning_velocity', 'stats', 'achievements', 'createdAt')
         extra_kwargs = {'password': {'write_only': True}}
 
     def get_stats(self, obj):
@@ -159,7 +160,13 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
+        instance = getattr(self, 'instance', None)
+        if instance and instance.email == value:
+            return value
+        qs = User.objects.filter(email=value)
+        if instance:
+            qs = qs.exclude(id=instance.id)
+        if qs.exists():
             raise serializers.ValidationError("This email address is already in use.")
         return value
 
@@ -262,7 +269,14 @@ class ModuleSerializer(serializers.ModelSerializer):
         user = request.user if request else None
         if not user or not user.is_authenticated:
             return []
-        if not (getattr(user, "has_taken_quiz", False) or getattr(user, "diagnostic_completed", False)):
+        quiz_ok = bool(getattr(user, "has_taken_quiz", False) or getattr(user, "diagnostic_completed", False))
+        if not quiz_ok:
+            try:
+                from assessments.models import DiagnosticQuizAttempt
+                quiz_ok = DiagnosticQuizAttempt.objects.filter(user=user, status="COMPLETED").exists()
+            except Exception:
+                quiz_ok = False
+        if not quiz_ok:
             return []
         if obj.order != 1:
             previous = Module.objects.filter(order=obj.order - 1).first()

@@ -215,7 +215,11 @@ export default function LessonView() {
       <Layout>
         <div className="flex items-center justify-center min-h-[70vh] px-4">
           <div className="max-w-lg w-full bg-card border border-border rounded-2xl p-8 text-center space-y-4">
-            <h1 className="text-2xl font-bold">Unable to load data. Please refresh.</h1>
+            <h1 className="text-2xl font-bold">Unable to load lesson content</h1>
+            <p className="text-muted-foreground">Please try again.</p>
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg">
+              Retry
+            </button>
           </div>
         </div>
       </Layout>

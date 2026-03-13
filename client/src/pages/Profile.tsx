@@ -90,9 +90,8 @@ export default function Profile() {
     },
     onError: (error) => {
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error.message,
-        variant: "destructive",
       });
     },
   });
@@ -156,13 +155,19 @@ export default function Profile() {
     return (first + last).toUpperCase() || "U";
   };
 
-  const memberSince = user?.createdAt 
-    ? new Date(user.createdAt as unknown as string).toLocaleDateString('en-US', {
+  const memberSinceRaw = (user as any)?.createdAt || (user as any)?.dateJoined;
+  const memberSince = memberSinceRaw 
+    ? new Date(memberSinceRaw as unknown as string).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       })
     : "Not available";
+  const isDirty = (
+    formData.firstName !== (user?.firstName || "") ||
+    formData.lastName !== (user?.lastName || "") ||
+    formData.email !== (user?.email || "")
+  );
 
   return (
     <Layout>
@@ -289,7 +294,7 @@ export default function Profile() {
               <div className="flex gap-3">
                 <Button 
                   onClick={handleSave} 
-                  disabled={updateProfileMutation.isPending}
+                  disabled={updateProfileMutation.isPending || !isDirty}
                 >
                   {updateProfileMutation.isPending ? (
                     <>

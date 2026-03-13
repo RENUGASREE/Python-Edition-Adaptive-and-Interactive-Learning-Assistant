@@ -84,6 +84,13 @@ def _progress_user_id(user):
     return user.original_uuid or str(user.id)
 
 def _quiz_completed(user):
+    try:
+        from assessments.models import DiagnosticQuizAttempt
+        has_completed_attempt = DiagnosticQuizAttempt.objects.filter(user=user, status="COMPLETED").exists()
+        if has_completed_attempt:
+            return True
+    except Exception:
+        pass
     return bool(getattr(user, "has_taken_quiz", False) or getattr(user, "diagnostic_completed", False))
 
 def _module_completed(user, module_id):

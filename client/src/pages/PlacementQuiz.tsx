@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogHeader,
@@ -28,6 +29,9 @@ export default function PlacementQuiz() {
   const [, setLocation] = useLocation();
   const hasTakenQuiz = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
   const { data: modules, isLoading: loadingModules } = useModules({ enabled: hasTakenQuiz });
+  const [phase, setPhase] = useState<"intro" | "active" | "resume">("intro");
+  const [submitConfirm, setSubmitConfirm] = useState(false);
+  const [exitConfirm, setExitConfirm] = useState(false);
   const firstLessonId = useMemo(() => {
     const lessons = modules?.flatMap((m: any) => (m.lessons || []).map((l: any) => ({ ...l, moduleOrder: m.order }))) || [];
     lessons.sort((a: any, b: any) => {
@@ -65,19 +69,10 @@ export default function PlacementQuiz() {
   const lastViolationTsRef = useMemo(() => ({ ts: 0 }), []);
 
   useEffect(() => {
-    const startAttempt = async () => {
+    const bootstrap = async () => {
       try {
         const accessToken = localStorage.getItem("access_token");
-        const res = await fetch(apiUrl("/diagnostic/start"), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-          credentials: "include",
-        });
-        const data = await res.json().catch(() => ({}));
-        const meta = data?.attemptMeta || diagnostic?.attemptMeta;
+        const meta = diagnostic?.attemptMeta;
         if (meta?.attemptId) {
           setAttemptId(Number(meta.attemptId));
         }
@@ -90,10 +85,13 @@ export default function PlacementQuiz() {
           if (remaining === 0) {
             setExpired(true);
           }
+          if (!meta.completedAt && meta.status === "IN_PROGRESS" && remaining > 0) {
+            setPhase("resume");
+          }
         }
       } catch {}
     };
-    startAttempt();
+    bootstrap();
   }, [diagnostic]);
 
   useEffect(() => {
@@ -117,10 +115,10 @@ export default function PlacementQuiz() {
       setViolationCount((prev) => {
         const next = prev + 1;
         if (next === 1) {
-          setWarningMessage("Warning: Leaving the quiz tab is not allowed. Repeated violations will automatically submit your quiz.");
+          setWarningMessage("You switched tabs. Please stay on the test page.");
           setTabWarning(true);
         } else if (next === 2) {
-          setWarningMessage("Final Warning: Switching tabs again will submit your quiz.");
+          setWarningMessage("Final warning: One more tab switch will submit your test.");
           setTabWarning(true);
         }
         return next;
@@ -241,6 +239,48 @@ export default function PlacementQuiz() {
     }
   };
 
+  const startTest = async () => {
+    setError(null);
+    try {
+      const accessToken = localStorage.getItem("access_token");
+      const res = await fetch(apiUrl("/diagnostic/start"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      const meta = data?.attemptMeta;
+      if (meta?.attemptId) setAttemptId(Number(meta.attemptId));
+      if (meta?.startTime && meta?.durationSeconds) {
+        const startMillis = new Date(meta.startTime).getTime();
+        const deadline = startMillis + (meta.durationSeconds * 1000);
+        const now = Date.now();
+        setTimeLeft(Math.max(Math.floor((deadline - now) / 1000), 0));
+      }
+      setPhase("active");
+    } catch (e: any) {
+      setError(e?.message || "Failed to start test");
+    }
+  };
+
+  const cancelAttempt = async () => {
+    try {
+      const accessToken = localStorage.getItem("access_token");
+      await fetch(apiUrl("/diagnostic/cancel"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        credentials: "include",
+      });
+    } catch {}
+    setLocation("/dashboard");
+  };
+
   if (loadingAttempts || (hasTakenQuiz && loadingModules)) {
     return (
       <Layout>
@@ -276,6 +316,54 @@ export default function PlacementQuiz() {
     );
   }
 
+  if (phase === "intro") {
+    return (
+      <Layout>
+        <div className="max-w-2xl mx-auto py-12 px-4 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Placement Test Instructions</CardTitle>
+              <CardDescription>Read these rules before starting.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <ol className="list-decimal pl-5 space-y-2">
+                <li>This test determines your Python skill level.</li>
+                <li>Please answer questions honestly.</li>
+                <li>Avoid refreshing the page during the test.</li>
+                <li>Avoid switching browser tabs during the test.</li>
+                <li>Your learning path will be generated based on your performance.</li>
+                <li>If you exit before completing, the test will restart.</li>
+              </ol>
+              <div className="flex gap-3 pt-4">
+                <Button onClick={startTest}>Start Test</Button>
+                <Button variant="outline" onClick={() => setLocation("/dashboard")}>Go Back</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (phase === "resume") {
+    return (
+      <Layout>
+        <div className="max-w-xl mx-auto py-16 px-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Unfinished Placement Test</CardTitle>
+              <CardDescription>You have an unfinished placement test.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-3">
+              <Button onClick={() => setPhase("active")}>Resume Test</Button>
+              <Button variant="outline" onClick={cancelAttempt}>Cancel Attempt</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="max-w-3xl mx-auto py-12 px-4 space-y-6">
@@ -288,6 +376,30 @@ export default function PlacementQuiz() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogAction>Continue</AlertDialogAction>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={submitConfirm} onOpenChange={setSubmitConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Submit Test</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to submit your answers?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogCancel>Review Again</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleSubmit()}>Submit</AlertDialogAction>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={exitConfirm} onOpenChange={setExitConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Exit Test</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to exit the placement test? Your progress will not be saved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogCancel>Continue Test</AlertDialogCancel>
+            <AlertDialogAction onClick={cancelAttempt}>Exit Test</AlertDialogAction>
           </AlertDialogContent>
         </AlertDialog>
         <Card>
@@ -334,8 +446,11 @@ export default function PlacementQuiz() {
 
             {error && <div className="text-sm text-destructive">{error}</div>}
 
-            <div className="flex justify-end">
-              <Button onClick={() => handleSubmit()} disabled={submitting || questions.length === 0 || expired}>
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setExitConfirm(true)} disabled={submitting || expired}>
+                Exit Test
+              </Button>
+              <Button onClick={() => setSubmitConfirm(true)} disabled={submitting || questions.length === 0 || expired}>
                 {submitting ? "Submitting..." : "Submit quiz"}
               </Button>
             </div>

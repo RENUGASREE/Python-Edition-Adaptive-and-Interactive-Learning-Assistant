@@ -36,7 +36,17 @@ class DiagnosticQuizAttempt(models.Model):
     raw_score = models.FloatField(default=0)
     weighted_score = models.FloatField(default=0)
     locked = models.BooleanField(default=False)
-    status = models.CharField(max_length=20, default="active")
+    status = models.CharField(
+        max_length=20,
+        default="NOT_STARTED",
+        choices=[
+            ("NOT_STARTED", "NOT_STARTED"),
+            ("IN_PROGRESS", "IN_PROGRESS"),
+            ("COMPLETED", "COMPLETED"),
+            ("CANCELLED", "CANCELLED"),
+            ("INVALID", "INVALID"),
+        ],
+    )
 
 
 class AssessmentInteraction(models.Model):

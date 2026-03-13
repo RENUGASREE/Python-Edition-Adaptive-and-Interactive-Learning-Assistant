@@ -14,6 +14,16 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface LayoutProps {
   children: ReactNode;
@@ -24,6 +34,7 @@ export function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const hasTakenQuiz = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
+  const [gateOpen, setGateOpen] = useState(false);
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -67,12 +78,7 @@ export function Layout({ children }: LayoutProps) {
                 locked ? (
                   <div
                     key={item.href}
-                    onClick={() => {
-                      try {
-                        localStorage.setItem("quizGateMessage", "Please complete the placement quiz first.");
-                      } catch {}
-                      setLocation("/dashboard");
-                    }}
+                    onClick={() => setGateOpen(true)}
                     className={cn(
                       "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group opacity-60",
                       isActive 
@@ -141,6 +147,22 @@ export function Layout({ children }: LayoutProps) {
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
+      <AlertDialog open={gateOpen} onOpenChange={setGateOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Access Restricted</AlertDialogTitle>
+            <AlertDialogDescription>
+              Please complete the placement quiz to access this section.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setLocation("/placement-quiz")}>
+              Take placement quiz
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
