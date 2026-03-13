@@ -1,5 +1,5 @@
 from django.contrib.auth import authenticate, login, logout
-from .models import User, Progress, QuizAttempt, QuestionAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -1012,12 +1012,12 @@ class SubmitQuizView(APIView):
                     is_correct = options[selected].get("correct", False)
                 if is_correct:
                     score += 1
-                QuestionAttempt.objects.create(
-                    attempt=attempt,
-                    question=question,
-                    selected_option=selected,
-                    is_correct=is_correct
-                )
+                # QuestionAttempt.objects.create(
+                #     attempt=attempt,
+                #     question=question,
+                #     selected_option=selected,
+                #     is_correct=is_correct
+                # )
 
         # Update score
         attempt.score = score

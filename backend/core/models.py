@@ -88,11 +88,11 @@ class QuizAttempt(models.Model):
     class Meta:
         unique_together = ('user', 'quiz')
 
-class QuestionAttempt(models.Model):
-    attempt = models.ForeignKey('QuizAttempt', on_delete=models.CASCADE)
-    question = models.ForeignKey('Question', on_delete=models.CASCADE)
-    selected_option = models.IntegerField()
-    is_correct = models.BooleanField()
+# class QuestionAttempt(models.Model):
+#     attempt = models.ForeignKey('QuizAttempt', on_delete=models.CASCADE)
+#     question = models.ForeignKey('Question', on_delete=models.CASCADE)
+#     selected_option = models.IntegerField()
+#     is_correct = models.BooleanField()
 
 # --- End Quiz Models ---
 
