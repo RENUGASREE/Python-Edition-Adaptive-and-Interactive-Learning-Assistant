@@ -49,7 +49,7 @@ export default function Dashboard() {
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       if (!res.ok) throw new Error("Failed to fetch skill gaps");
-      return res.json() as Promise<{ weak: string[]; improving: string[]; strong: string[]; all: any[] }>;
+      return res.json() as Promise<{ weak_topics: string[]; improving_topics: string[]; strong_topics: string[] }>;
     },
   });
   const { data: plan } = useQuery({
@@ -390,22 +390,22 @@ export default function Dashboard() {
               <div>
                 <div className="text-sm font-medium mb-2">Weak Areas</div>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  {(skillGaps?.weak || []).map((t) => <li key={`w-${t}`}>{t}</li>)}
-                  {(skillGaps?.weak || []).length === 0 && <li className="opacity-60">None</li>}
+                  {(skillGaps?.weak_topics || []).map((t) => <li key={`w-${t}`}>{t}</li>)}
+                  {(skillGaps?.weak_topics || []).length === 0 && <li className="opacity-60">None</li>}
                 </ul>
               </div>
               <div>
                 <div className="text-sm font-medium mb-2">Improving</div>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  {(skillGaps?.improving || []).map((t) => <li key={`i-${t}`}>{t}</li>)}
-                  {(skillGaps?.improving || []).length === 0 && <li className="opacity-60">None</li>}
+                  {(skillGaps?.improving_topics || []).map((t) => <li key={`i-${t}`}>{t}</li>)}
+                  {(skillGaps?.improving_topics || []).length === 0 && <li className="opacity-60">None</li>}
                 </ul>
               </div>
               <div>
                 <div className="text-sm font-medium mb-2">Strong</div>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  {(skillGaps?.strong || []).map((t) => <li key={`s-${t}`}>{t}</li>)}
-                  {(skillGaps?.strong || []).length === 0 && <li className="opacity-60">None</li>}
+                  {(skillGaps?.strong_topics || []).map((t) => <li key={`s-${t}`}>{t}</li>)}
+                  {(skillGaps?.strong_topics || []).length === 0 && <li className="opacity-60">None</li>}
                 </ul>
               </div>
             </div>

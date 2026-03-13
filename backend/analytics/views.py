@@ -46,18 +46,24 @@ class SkillGapView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request):
-        gaps = SkillGapAnalysis.objects.filter(user=request.user).order_by('topic')
-        if not gaps:
+        gaps_qs = SkillGapAnalysis.objects.filter(user=request.user).order_by('topic')
+        if not gaps_qs.exists():
             analyze_user_skill_gaps(request.user)
-            gaps = SkillGapAnalysis.objects.filter(user=request.user).order_by('topic')
-        weak = [g.topic for g in gaps if g.status == "WEAK"]
-        improving = [g.topic for g in gaps if g.status == "IMPROVING"]
-        strong = [g.topic for g in gaps if g.status == "STRONG"]
+            gaps_qs = SkillGapAnalysis.objects.filter(user=request.user).order_by('topic')
+        weak = []
+        improving = []
+        strong = []
+        for g in gaps_qs:
+            if g.status == "WEAK":
+                weak.append(g.topic)
+            elif g.status == "IMPROVING":
+                improving.append(g.topic)
+            elif g.status == "STRONG":
+                strong.append(g.topic)
         return Response({
-            "weak": weak,
-            "improving": improving,
-            "strong": strong,
-            "all": [{"topic": g.topic, "accuracy": g.accuracy, "status": g.status} for g in gaps],
+            "weak_topics": weak,
+            "improving_topics": improving,
+            "strong_topics": strong,
         })
 
 
