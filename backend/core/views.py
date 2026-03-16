@@ -114,7 +114,9 @@ def _module_completed(user, module_id):
 
 def _module_level_map(user):
     levels = {}
-    attempts = QuizAttempt.objects.filter(user=user).order_by("created_at")
+    # QuizAttempt uses `completed_at` as the timestamp field.
+    # Ordering by a non-existent field can raise FieldError and break `/api/modules/`.
+    attempts = QuizAttempt.objects.filter(user=user).order_by("completed_at")
     for attempt in attempts:
         match = re.search(r"module:(\d+):level:([A-Za-z]+)", attempt.notes or "")
         if match:
