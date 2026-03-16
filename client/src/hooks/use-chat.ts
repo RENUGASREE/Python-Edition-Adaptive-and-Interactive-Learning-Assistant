@@ -45,6 +45,9 @@ export function useChat(context?: TutorContext) {
 
     try {
       const accessToken = getAccessToken();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // Increased to 45s for AI responses
+
       const response = await fetch(apiUrl("/ai-tutor"), {
         method: "POST",
         headers: {
@@ -53,9 +56,15 @@ export function useChat(context?: TutorContext) {
         },
         body: JSON.stringify({ query: content, topic: context?.lessonTitle }),
         credentials: "include",
+        signal: controller.signal,
       });
 
-      if (!response.ok) throw new Error("Failed to send message");
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server error: ${response.status}`);
+      }
       const data = await response.json();
       const fallback = buildTutorResponse(content, context);
       setMessages((prev) => [
@@ -67,9 +76,15 @@ export function useChat(context?: TutorContext) {
           confidenceScore: data?.confidence_score ?? null,
         },
       ]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Chat error:", error);
-      setMessages((prev) => [...prev, { role: "assistant", content: "AI tutor is temporarily unavailable." }]);
+      let content = "AI tutor is temporarily unavailable.";
+      if (error?.message) {
+        if (error.message.includes("401")) content = "Session expired. Please log in again.";
+        else if (error.name === "AbortError") content = "AI response timed out. Try again with a shorter question.";
+        else content = `AI Tutor error: ${error.message}`;
+      }
+      setMessages((prev) => [...prev, { role: "assistant", content }]);
     } finally {
       setIsLoading(false);
     }

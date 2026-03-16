@@ -145,8 +145,8 @@ class UserMasteryAdmin(admin.ModelAdmin):
 
 @admin.register(DiagnosticAttempt)
 class DiagnosticAttemptAdmin(admin.ModelAdmin):
-    list_display = ('user', 'quiz_id', 'overall_score', 'created_at')
-    list_filter = ('quiz_id',)
+    list_display = ('user', 'quiz_id', 'score_percent', 'created_at')
+    list_filter = ('quiz_id', 'created_at', 'user')
     search_fields = ('user__username',)
     raw_id_fields = ('user',)
     fieldsets = (
@@ -154,6 +154,11 @@ class DiagnosticAttemptAdmin(admin.ModelAdmin):
         ('Timestamps', {'fields': ('created_at',)}),
     )
     readonly_fields = ('created_at',)
+
+    def score_percent(self, obj):
+        return f"{round(obj.overall_score, 1)}%"
+    score_percent.short_description = 'Overall Score'
+    score_percent.admin_order_field = 'overall_score'
 
 @admin.register(DiagnosticQuestionMeta)
 class DiagnosticQuestionMetaAdmin(admin.ModelAdmin):

@@ -1,16 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
 import { apiUrl, getAccessToken } from "@/lib/api";
-import { type Module, type Lesson } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { type Module, type Lesson } from "@/types";
 
 type ModuleWithLessons = Module & { lessons: Lesson[] };
 
 export function useModules(options?: { enabled?: boolean }) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
-    queryKey: [api.modules.list.path],
+    queryKey: ["/api/modules"],
     queryFn: async () => {
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl(api.modules.list.path), {
+      const res = await fetch(apiUrl("/api/modules/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
@@ -27,17 +28,18 @@ export function useModules(options?: { enabled?: boolean }) {
         error.status = res.status;
         throw error;
       }
-      return api.modules.list.responses[200].parse(await res.json()) as ModuleWithLessons[];
+      return await res.json() as ModuleWithLessons[];
     },
-    enabled: options?.enabled ?? true,
+    enabled: (options?.enabled ?? true) && isAuthenticated,
   });
 }
 
 export function useModule(id: number) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
-    queryKey: [api.modules.get.path, id],
+    queryKey: ["/api/modules", id],
     queryFn: async () => {
-      const url = buildUrl(api.modules.get.path, { id });
+      const url = `/api/modules/${id}/`;
       const accessToken = getAccessToken();
       const res = await fetch(apiUrl(url), {
         credentials: "include",
@@ -56,8 +58,8 @@ export function useModule(id: number) {
         error.status = res.status;
         throw error;
       }
-      return api.modules.get.responses[200].parse(await res.json());
+      return await res.json();
     },
-    enabled: !!id,
+    enabled: !!id && isAuthenticated,
   });
 }

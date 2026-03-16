@@ -1,6 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
-import { useProgress } from "@/hooks/use-progress";
+import { useUserProgress } from "@/hooks/use-progress";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,7 @@ async function uploadProfileImage(file: File): Promise<{ profileImageUrl: string
 
 export default function Profile() {
   const { user } = useAuth();
-  const { data: progress } = useProgress();
+  const { data: progress } = useUserProgress();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,10 +88,12 @@ export default function Profile() {
       });
       setIsEditing(false);
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error("Profile update error:", error);
       toast({
         title: "Update failed",
-        description: error.message,
+        description: error.message || "Please check your input and try again.",
+        variant: "destructive",
       });
     },
   });
@@ -223,7 +225,7 @@ export default function Profile() {
                 <h3 className="text-lg font-semibold">
                   {user?.firstName || user?.lastName 
                     ? `${user.firstName || ''} ${user.lastName || ''}`.trim() 
-                    : "User Name"}
+                    : user?.username || "User"}
                 </h3>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
                 <div className="flex items-center gap-2 mt-2">

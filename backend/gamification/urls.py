@@ -3,5 +3,5 @@ from .views import GamificationSummaryView
 
 
 urlpatterns = [
-    path("gamification/summary", GamificationSummaryView.as_view(), name="gamification_summary"),
+    path("gamification/summary/", GamificationSummaryView.as_view(), name="gamification_summary"),
 ]

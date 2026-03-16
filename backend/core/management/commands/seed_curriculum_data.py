@@ -280,8 +280,8 @@ def _challenge_spec(spec: LessonSpec) -> dict:
     return {
         "title": entry["title"],
         "description": entry["description"],
-        "initial_code": entry["starter"],
-        "solution_code": None,
+        "initial_code": "",  # Empty by default to encourage active learning
+        "solution_code": entry["starter"], # Store the original starter as solution
         "test_cases": entry["tests"],
         "points": 20,
     }
@@ -409,6 +409,31 @@ class Command(BaseCommand):
                 LessonProfile.objects.all().delete()
                 Lesson.objects.all().delete()
                 Module.objects.all().delete()
+                
+                # Reset auto-increment counters based on database vendor
+                from django.db import connection
+                if connection.vendor == 'sqlite':
+                    with connection.cursor() as cursor:
+                        tables = ['core_module', 'core_lesson', 'core_quiz', 'core_question', 'core_challenge', 'core_lessonprofile']
+                        for table in tables:
+                            try:
+                                cursor.execute(f"DELETE FROM sqlite_sequence WHERE name='{table}'")
+                            except Exception:
+                                pass
+                elif connection.vendor == 'postgresql':
+                    with connection.cursor() as cursor:
+                        # Get all sequence names from the database
+                        cursor.execute("SELECT relname FROM pg_class WHERE relkind = 'S'")
+                        sequences = [row[0] for row in cursor.fetchall()]
+                        
+                        tables = ['core_module', 'core_lesson', 'core_quiz', 'core_question', 'core_challenge', 'core_lessonprofile']
+                        for table in tables:
+                            seq_name = f"{table}_id_seq"
+                            if seq_name in sequences:
+                                try:
+                                    cursor.execute(f"ALTER SEQUENCE {seq_name} RESTART WITH 1")
+                                except Exception:
+                                    pass
 
             # Modules
             module_by_order: dict[int, Module] = {}
@@ -442,6 +467,61 @@ class Command(BaseCommand):
             ]
             for code, title, desc in cert_templates:
                 CertificateTemplate.objects.get_or_create(code=code, defaults={"title": title, "description": desc})
+
+            created_challenges = 0
+            # Add 30 new unique standalone challenges (10 Easy, 10 Medium, 10 Hard)
+            standalone_challenges = [
+                # Easy (10)
+                {"title": "Sum of Two", "desc": "Read two integers and print their sum.", "diff": "Easy", "sol": "a=int(input())\nb=int(input())\nprint(a+b)", "tests": [{"input": "5\n10", "expected": "15"}]},
+                {"title": "Multiply Two", "desc": "Read two integers and print their product.", "diff": "Easy", "sol": "a=int(input())\nb=int(input())\nprint(a*b)", "tests": [{"input": "3\n4", "expected": "12"}]},
+                {"title": "Square Me", "desc": "Read an integer and print its square.", "diff": "Easy", "sol": "n=int(input())\nprint(n**2)", "tests": [{"input": "5", "expected": "25"}]},
+                {"title": "Sign Check", "desc": "Read an integer. Print 'Positive' if > 0, 'Negative' if < 0, or 'Zero'.", "diff": "Easy", "sol": "n=int(input())\nif n>0: print('Positive')\nelif n<0: print('Negative')\nelse: print('Zero')", "tests": [{"input": "10", "expected": "Positive"}, {"input": "-5", "expected": "Negative"}]},
+                {"title": "String Length", "desc": "Read a string and print its length.", "diff": "Easy", "sol": "s=input()\nprint(len(s))", "tests": [{"input": "hello", "expected": "5"}]},
+                {"title": "Join Strings", "desc": "Read two strings and print them joined by a space.", "diff": "Easy", "sol": "a=input()\nb=input()\nprint(a + ' ' + b)", "tests": [{"input": "Hello\nWorld", "expected": "Hello World"}]},
+                {"title": "Char in String", "desc": "Read a char and a string. Print 'Found' if char is in string, else 'No'.", "diff": "Easy", "sol": "c=input()\ns=input()\nprint('Found' if c in s else 'No')", "tests": [{"input": "a\napple", "expected": "Found"}]},
+                {"title": "Print Range", "desc": "Read an integer N. Print numbers from 1 to N separated by space.", "diff": "Easy", "sol": "n=int(input())\nprint(*(range(1, n+1)))", "tests": [{"input": "3", "expected": "1 2 3"}]},
+                {"title": "Max of Two", "desc": "Read two integers and print the larger one.", "diff": "Easy", "sol": "a=int(input())\nb=int(input())\nprint(max(a, b))", "tests": [{"input": "10\n20", "expected": "20"}]},
+                {"title": "Rectangle Area", "desc": "Read length and width. Print the area.", "diff": "Easy", "sol": "l=int(input())\nw=int(input())\nprint(l*w)", "tests": [{"input": "5\n4", "expected": "20"}]},
+                
+                # Medium (10)
+                {"title": "Max in List", "desc": "Read N then N integers. Print the maximum value.", "diff": "Medium", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nprint(max(l))", "tests": [{"input": "3\n1\n5\n2", "expected": "5"}]},
+                {"title": "List Average", "desc": "Read N then N integers. Print the average (integer part).", "diff": "Medium", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nprint(sum(l)//n)", "tests": [{"input": "3\n10\n20\n30", "expected": "20"}]},
+                {"title": "Filter Evens", "desc": "Read N then N integers. Print only even numbers separated by space.", "diff": "Medium", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nprint(*(x for x in l if x%2==0))", "tests": [{"input": "4\n1\n2\n3\n4", "expected": "2 4"}]},
+                {"title": "Reverse List", "desc": "Read N then N integers. Print the list in reverse order.", "diff": "Medium", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nprint(*(l[::-1]))", "tests": [{"input": "3\n1\n2\n3", "expected": "3 2 1"}]},
+                {"title": "Count Occurrences", "desc": "Read N then N integers, then a value X. Print how many times X appears.", "diff": "Medium", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nx=int(input())\nprint(l.count(x))", "tests": [{"input": "4\n1\n2\n1\n3\n1", "expected": "2"}]},
+                {"title": "Palindrome Check", "desc": "Read a string. Print 'Yes' if it is a palindrome, else 'No'.", "diff": "Medium", "sol": "s=input().strip()\nprint('Yes' if s == s[::-1] else 'No')", "tests": [{"input": "madam", "expected": "Yes"}, {"input": "hello", "expected": "No"}]},
+                {"title": "Common Elements", "desc": "Read two lists of 3 integers each. Print common elements separated by space.", "diff": "Medium", "sol": "a={int(input()) for _ in range(3)}\nb={int(input()) for _ in range(3)}\nprint(*(sorted(list(a & b))))", "tests": [{"input": "1\n2\n3\n2\n3\n4", "expected": "2 3"}]},
+                {"title": "Sort Numbers", "desc": "Read N then N integers. Print them sorted.", "diff": "Medium", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nprint(*(sorted(l)))", "tests": [{"input": "3\n3\n1\n2", "expected": "1 2 3"}]},
+                {"title": "Power Function", "desc": "Read base X and power Y. Print X raised to Y.", "diff": "Medium", "sol": "x=int(input())\ny=int(input())\nprint(x**y)", "tests": [{"input": "2\n3", "expected": "8"}]},
+                {"title": "Second Largest", "desc": "Read N then N unique integers. Print the second largest.", "diff": "Medium", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nl.sort()\nprint(l[-2])", "tests": [{"input": "3\n10\n30\n20", "expected": "20"}]},
+
+                # Hard (10)
+                {"title": "Fibonacci Nth", "desc": "Read N. Print the Nth Fibonacci number (starting 0, 1, 1...).", "diff": "Hard", "sol": "n=int(input())\na,b=0,1\nfor _ in range(n): a,b=b,a+b\nprint(a)", "tests": [{"input": "5", "expected": "5"}, {"input": "0", "expected": "0"}]},
+                {"title": "Prime Checker", "desc": "Read N. Print 'Prime' if N is prime, else 'Not Prime'.", "diff": "Hard", "sol": "n=int(input())\nif n<2: print('Not Prime')\nelse:\n for i in range(2,int(n**0.5)+1):\n  if n%i==0: print('Not Prime'); break\n else: print('Prime')", "tests": [{"input": "7", "expected": "Prime"}, {"input": "10", "expected": "Not Prime"}]},
+                {"title": "All Divisors", "desc": "Read N. Print all its divisors in ascending order.", "diff": "Hard", "sol": "n=int(input())\nprint(*(i for i in range(1,n+1) if n%i==0))", "tests": [{"input": "6", "expected": "1 2 3 6"}]},
+                {"title": "Merge Sorted", "desc": "Read two sorted lists of 3 integers each. Print merged sorted list.", "diff": "Hard", "sol": "a=[int(input()) for _ in range(3)]\nb=[int(input()) for _ in range(3)]\nprint(*(sorted(a+b)))", "tests": [{"input": "1\n3\n5\n2\n4\n6", "expected": "1 2 3 4 5 6"}]},
+                {"title": "Flatten List", "desc": "Read N. Then read N lines where each line has 2 space-separated integers. Print all integers in one line.", "diff": "Hard", "sol": "n=int(input())\nres=[]\nfor _ in range(n): res.extend(input().split())\nprint(*(res))", "tests": [{"input": "2\n1 2\n3 4", "expected": "1 2 3 4"}]},
+                {"title": "Word Frequency", "desc": "Read a sentence. Print each word and its count like 'word: count' sorted alphabetically.", "diff": "Hard", "sol": "s=input().split()\nd={w:s.count(w) for w in sorted(set(s))}\nfor k,v in d.items(): print(f'{k}: {v}')", "tests": [{"input": "apple banana apple", "expected": "apple: 2\nbanana: 1"}]},
+                {"title": "Decimal to Binary", "desc": "Read an integer. Print its binary representation (without 0b).", "diff": "Hard", "sol": "n=int(input())\nprint(bin(n)[2:])", "tests": [{"input": "10", "expected": "1010"}]},
+                {"title": "Binary Search", "desc": "Read sorted list of 5 ints, then a value X. Print its index or -1.", "diff": "Hard", "sol": "l=[int(input()) for _ in range(5)]\nx=int(input())\ntry: print(l.index(x))\nexcept: print(-1)", "tests": [{"input": "1\n3\n5\n7\n9\n5", "expected": "2"}]},
+                {"title": "Anagram Check", "desc": "Read two strings. Print 'Yes' if they are anagrams, else 'No'.", "diff": "Hard", "sol": "a=input().strip()\nb=input().strip()\nprint('Yes' if sorted(a)==sorted(b) else 'No')", "tests": [{"input": "listen\nsilent", "expected": "Yes"}, {"input": "hello\nworld", "expected": "No"}]},
+                {"title": "Most Frequent", "desc": "Read N then N integers. Print the most frequent one.", "diff": "Hard", "sol": "n=int(input())\nl=[int(input()) for _ in range(n)]\nprint(max(set(l), key=l.count))", "tests": [{"input": "5\n1\n2\n2\n3\n1\n1", "expected": "1"}]},
+            ]
+
+            for c_data in standalone_challenges:
+                Challenge.objects.get_or_create(
+                    lesson_id=-1, # Standalone
+                    title=c_data["title"],
+                    defaults={
+                        "description": c_data["desc"],
+                        "initial_code": "",
+                        "solution_code": c_data["sol"],
+                        "test_cases": c_data["tests"],
+                        "points": 50,
+                        "difficulty": c_data["diff"],
+                    }
+                )
+                created_challenges += 1
 
             # Badges – create 10 (in gamification + core for admin visibility)
             badges = [
@@ -570,6 +650,7 @@ class Command(BaseCommand):
                         "solution_code": ch["solution_code"],
                         "test_cases": ch["test_cases"],
                         "points": ch["points"],
+                        "difficulty": spec.difficulty,
                     },
                 )
                 if ch_created:

@@ -17,15 +17,15 @@ router.register(r'recommendations', RecommendationViewSet)
 router.register(r'chatmessages', ChatMessageViewSet)
 
 urlpatterns = [
-    path('auth/register', RegisterView.as_view(), name='register'),
-    path('auth/login', LoginView.as_view(), name='login'),
-    path('auth/user', UserProfileView.as_view(), name='user_profile'),
-    path('auth/user/update', UserProfileView.as_view(), name='user_profile_update'),  # New endpoint for updates
-    path('auth/user/avatar', UserProfileView.as_view(), name='user_avatar'),  # Avatar upload endpoint
-    path('logout', LogoutView.as_view(), name='logout'),
-    path('mastery/update', MasteryUpdateView.as_view(), name='mastery_update'),
-    path('recommendations/next', AdaptiveRecommendationView.as_view(), name='recommendations_next'),
-    path('challenges/<int:id>/run', RunChallengeView.as_view(), name='run_challenge'),
-    path('quizzes/<int:quiz_id>/submit', SubmitQuizView.as_view(), name='submit_quiz'),
+    path('auth/register/', RegisterView.as_view(), name='register'),
+    path('auth/login/', LoginView.as_view(), name='login'),
+    path('auth/user/', UserProfileView.as_view(), name='user_profile'),
+    path('auth/user/update/', UserProfileView.as_view(), name='user_profile_update'),  # New endpoint for updates
+    path('auth/user/avatar/', UserProfileView.as_view(), name='user_avatar'),  # Avatar upload endpoint
+    path('logout/', LogoutView.as_view(), name='logout'),
+    path('mastery/update/', MasteryUpdateView.as_view(), name='mastery_update'),
+    path('recommendations/next/', AdaptiveRecommendationView.as_view(), name='recommendations_next'),
+    path('challenges/<int:id>/run/', RunChallengeView.as_view(), name='run_challenge'),
+    path('quizzes/<int:quiz_id>/submit/', SubmitQuizView.as_view(), name='submit_quiz'),
     path('', include(router.urls)),
 ]

@@ -21,8 +21,12 @@ import subprocess
 import os
 import uuid
 import sys
+import tempfile
 import json
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 def normalize_level_for_score(score):
     if score < 50:
@@ -177,24 +181,35 @@ def _module_unlocked(user, module):
 
 def _lesson_unlocked(user, lesson):
     if not _quiz_completed(user):
+        # Allow first lesson of first module even without quiz
+        module = Module.objects.filter(id=lesson.module_id).first()
+        if module and module.order == 1 and lesson.order == 1:
+            return True
         return False
     module = Module.objects.filter(id=lesson.module_id).first()
     if not module or not _module_unlocked(user, module):
         return False
+    
+    # If it's the first lesson of a module, it's unlocked if module is unlocked
+    if lesson.order == 1:
+        return _prerequisites_met(user, lesson.id)
+
     allowed_ids = _lesson_ids_for_user_module(user, lesson.module_id)
     ordered_lessons = list(Lesson.objects.filter(id__in=allowed_ids).order_by("order"))
-    previous_lesson = next((item for item in ordered_lessons if item.order == lesson.order - 1), None)
+    # Find the immediate previous lesson in the ordered list
+    previous_lesson = next((item for item in reversed(ordered_lessons) if item.order < lesson.order), None)
+    
     if not previous_lesson:
         return _prerequisites_met(user, lesson.id)
+        
     user_id = _progress_user_id(user)
     sequential_ok = UserProgress.objects.filter(
         user_id=user_id,
         lesson_id=previous_lesson.id,
         completed=True,
     ).exists()
-    if not sequential_ok:
-        return False
-    return _prerequisites_met(user, lesson.id)
+    
+    return sequential_ok and _prerequisites_met(user, lesson.id)
 
 def _unlocked_module_ids(user):
     if not _quiz_completed(user):
@@ -227,7 +242,8 @@ def _unlocked_lesson_ids(user):
             completed=True,
         ).values_list("lesson_id", flat=True))
         for lesson in lessons:
-            previous = next((l for l in lessons if l.order == lesson.order - 1), None)
+            # Find previous lesson in the current module's ordered list
+            previous = next((l for l in reversed(lessons) if l.order < lesson.order), None)
             if (not previous or previous.id in completed_ids) and _prerequisites_met(user, lesson.id):
                 unlocked_ids.append(lesson.id)
     return unlocked_ids
@@ -269,7 +285,7 @@ class RegisterView(generics.CreateAPIView):
             return Response({'message': '; '.join(error_messages)}, status=status.HTTP_400_BAD_REQUEST)
 
         user = serializer.save()
-        login(request, user) # Auto login after register
+        # login(request, user) # Removed to avoid session/CSRF issues with JWT
         
         # Generate JWT tokens for immediate login
         refresh = RefreshToken.for_user(user)
@@ -297,7 +313,7 @@ class LoginView(APIView):
         user = authenticate(request, username=username, password=password)
 
         if user:
-            login(request, user)
+            # login(request, user) # Removed to avoid session/CSRF issues with JWT
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
             return Response({
@@ -388,37 +404,44 @@ class LogoutView(APIView):
         return Response({'message': 'Logged out'})
 
 class RunChallengeView(APIView):
-    permission_classes = (permissions.AllowAny,)  # Allow anyone to run code for now, or restrict to IsAuthenticated
+    permission_classes = (permissions.IsAuthenticated,)
 
     def post(self, request, id):
-        code = request.data.get('code')
-        if not code:
-            return Response({'message': 'No code provided'}, status=status.HTTP_400_BAD_REQUEST)
+        code = request.data.get('code', '')
+        if not code.strip():
+            return Response({'message': 'Please write some code before running.'}, status=status.HTTP_400_BAD_REQUEST)
 
         def run_code(code_to_run):
             filename = f"temp_{uuid.uuid4()}.py"
-            filepath = os.path.join(os.getcwd(), 'tmp', filename)
-            os.makedirs(os.path.join(os.getcwd(), 'tmp'), exist_ok=True)
+            # Use a more reliable temp directory
+            temp_dir = os.path.join(tempfile.gettempdir(), 'great_design_tmp')
+            os.makedirs(temp_dir, exist_ok=True)
+            filepath = os.path.join(temp_dir, filename)
             try:
-                with open(filepath, 'w') as f:
+                with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(code_to_run)
+                # Quote the executable on Windows if it contains spaces
+                executable = sys.executable
+                
                 result = subprocess.run(
-                    [sys.executable, filepath],
+                    [executable, filepath],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
+                    cwd=temp_dir,
+                    encoding='utf-8'
                 )
                 return result.stdout, result.stderr
             finally:
                 if os.path.exists(filepath):
-                    os.remove(filepath)
+                    try:
+                        os.remove(filepath)
+                    except Exception:
+                        pass
 
         try:
             challenge = Challenge.objects.get(id=id)
         except Challenge.DoesNotExist:
-             # If challenge doesn't exist, we might still want to run the code (playground mode)
-             # But the URL implies running a specific challenge. 
-             # For now, return 404 if not found.
             return Response({'message': 'Challenge not found'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
@@ -428,20 +451,26 @@ class RunChallengeView(APIView):
             error_message = None
             combined_output = ""
 
+            temp_dir = os.path.join(tempfile.gettempdir(), 'great_design_tmp')
+            os.makedirs(temp_dir, exist_ok=True)
+
             if test_cases:
                 for tc in test_cases:
-                    tc_input = (tc.get("input") or "").encode("utf-8")
+                    tc_input = str(tc.get("input") or "")
                     filename = f"temp_{uuid.uuid4()}.py"
-                    filepath = os.path.join(os.getcwd(), 'tmp', filename)
-                    os.makedirs(os.path.join(os.getcwd(), 'tmp'), exist_ok=True)
+                    filepath = os.path.join(temp_dir, filename)
                     try:
                         with open(filepath, 'w', encoding='utf-8') as f:
                             f.write(code)
+                        executable = sys.executable
                         result = subprocess.run(
-                            [sys.executable, filepath],
+                            [executable, filepath],
                             input=tc_input,
                             capture_output=True,
-                            text=True
+                            text=True,
+                            timeout=5,
+                            cwd=temp_dir,
+                            encoding='utf-8'
                         )
                         out = result.stdout.strip()
                         err = result.stderr.strip()
@@ -454,9 +483,16 @@ class RunChallengeView(APIView):
                             else:
                                 error_message = f"Expected '{expected}', got '{out}'"
                             break
+                    except subprocess.TimeoutExpired:
+                        all_passed = False
+                        error_message = "Execution timed out"
+                        break
                     finally:
                         if os.path.exists(filepath):
-                            os.remove(filepath)
+                            try:
+                                os.remove(filepath)
+                            except Exception:
+                                pass
             else:
                 # Fallback to single run and optional comparison with reference solution
                 stdout, stderr = run_code(code)
@@ -491,13 +527,13 @@ class RunChallengeView(APIView):
                 'output': '',
                 'error': 'Execution timed out',
                 'passed': False
-            })
+            }, status=status.HTTP_408_REQUEST_TIMEOUT)
         except Exception as e:
             return Response({
                 'output': '',
                 'error': str(e),
                 'passed': False
-            })
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         finally:
             try:
                 analyze_user_skill_gaps(request.user)
@@ -529,7 +565,17 @@ class LessonViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        unlocked_ids = _unlocked_lesson_ids(self.request.user)
+        # Always allow viewing the lesson if it's explicitly requested by ID or in retrieve action
+        # (This avoids 404s when following valid dashboard links)
+        if self.action == 'retrieve' or self.kwargs.get('pk'):
+            return self.queryset.all()
+        
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return self.queryset.none()
+            
+        # Filter lessons by user's unlocked path
+        unlocked_ids = _unlocked_lesson_ids(user)
         return self.queryset.filter(id__in=unlocked_ids).order_by("order")
 
     def retrieve(self, request, *args, **kwargs):
@@ -537,10 +583,10 @@ class LessonViewSet(viewsets.ModelViewSet):
         if not lesson:
             logger.warning(f"Lesson not found: {kwargs.get('pk')}")
             return Response({"message": "Lesson not found"}, status=status.HTTP_404_NOT_FOUND)
-        if not _lesson_unlocked(request.user, lesson):
-            logger.info(f"Lesson not unlocked for user {request.user.id}: {lesson.id}")
-            return Response({"message": "You need to complete the placement quiz to personalize your learning path."}, status=status.HTTP_403_FORBIDDEN)
+        # Bypassing _lesson_unlocked check for direct ID requests to ensure access from dashboard
         try:
+            # Fix: Ensure Question import is available if needed
+            from .models import Quiz, Question
             has_quiz = Quiz.objects.filter(lesson_id=lesson.id).exists()
             if not has_quiz:
                 generated = generate_quiz_from_lesson(lesson)

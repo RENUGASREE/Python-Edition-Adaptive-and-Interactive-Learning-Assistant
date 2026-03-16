@@ -37,47 +37,49 @@ const AdaptiveContext = createContext<AdaptiveContextValue>({
 });
 
 export function AdaptiveProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  const hasCompletedQuiz = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
+
   const { data: recommendation, isLoading: loadingRecommendation } = useQuery({
     queryKey: ["/api/recommend-next"],
     queryFn: async () => {
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/recommend-next"), {
+      const res = await fetch(apiUrl("/recommend-next/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       if (!res.ok) throw new Error("Failed to fetch recommendation");
       return res.json();
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && hasCompletedQuiz,
   });
 
   const { data: analytics, isLoading: loadingAnalytics } = useQuery({
     queryKey: ["/api/analytics"],
     queryFn: async () => {
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/analytics"), {
+      const res = await fetch(apiUrl("/analytics/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       if (!res.ok) throw new Error("Failed to fetch analytics");
       return res.json();
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && hasCompletedQuiz,
   });
 
   const { data: metrics, isLoading: loadingMetrics } = useQuery({
     queryKey: ["/api/metrics"],
     queryFn: async () => {
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/metrics"), {
+      const res = await fetch(apiUrl("/metrics/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       if (!res.ok) throw new Error("Failed to fetch metrics");
       return res.json();
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && hasCompletedQuiz,
   });
 
   return (

@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiUrl, getAccessToken } from "@/lib/api";
-import { type Lesson, type Quiz, type Question, type Challenge } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { type Lesson, type Quiz, type Question, type Challenge } from "@/types";
 
 type LessonResponse = Lesson & {
   module: { title: string };
@@ -10,10 +10,11 @@ type LessonResponse = Lesson & {
 };
 
 export function useLesson(id: number) {
+  const { isAuthenticated } = useAuth();
   return useQuery({
-    queryKey: [api.lessons.get.path, id],
+    queryKey: ["/api/lessons", id],
     queryFn: async () => {
-      const url = buildUrl(api.lessons.get.path, { id });
+      const url = `/api/lessons/${id}/`;
       const accessToken = getAccessToken();
       const res = await fetch(apiUrl(url), {
         credentials: "include",
@@ -33,19 +34,19 @@ export function useLesson(id: number) {
         error.status = res.status;
         throw error;
       }
-      return api.lessons.get.responses[200].parse(await res.json());
+      return await res.json() as LessonResponse;
     },
-    enabled: !!id,
+    enabled: !!id && isAuthenticated,
   });
 }
 
 export function useRunChallenge() {
   return useMutation({
     mutationFn: async ({ id, code }: { id: number; code: string }) => {
-      const url = buildUrl(api.challenges.run.path, { id });
+      const url = `/api/challenges/${id}/run/`;
       const accessToken = getAccessToken();
       const res = await fetch(apiUrl(url), {
-        method: api.challenges.run.method,
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -54,8 +55,20 @@ export function useRunChallenge() {
         credentials: "include",
       });
       
-      if (!res.ok) throw new Error("Failed to run code");
-      return api.challenges.run.responses[200].parse(await res.json());
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Code execution failed:", res.status, text);
+        let message = `Server Error (${res.status}): ${text || "No response body"}`;
+        try {
+          const json = JSON.parse(text);
+          if (json?.message) message = json.message;
+          else if (json?.error) message = json.error;
+        } catch {
+          // If not JSON, we'll keep the descriptive message with status and body
+        }
+        throw new Error(message);
+      }
+      return await res.json();
     },
   });
 }

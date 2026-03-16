@@ -1,5 +1,5 @@
 import { useModules } from "@/hooks/use-modules";
-import { useProgress } from "@/hooks/use-progress";
+import { useUserProgress } from "@/hooks/use-progress";
 import { Layout } from "@/components/Layout";
 import { Loader2, Lock, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 
 export default function Curriculum() {
   const { data: modules, isLoading: loadingModules, error: modulesError, refetch: refetchModules } = useModules();
-  const { data: progress, isLoading: loadingProgress } = useProgress();
+  const { data: progress, isLoading: loadingProgress } = useUserProgress();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [lockedAlert, setLockedAlert] = useState<{ open: boolean; title: string; type: 'module' | 'lesson' | 'placement' }>({
@@ -170,12 +170,21 @@ export default function Curriculum() {
 
   const placementCompleted = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
   const isLessonLocked = (lessonId: number) => {
+    // Try to find the lesson in the modules data to see if the API already told us it's unlocked
+    const lessonFromModules = modules?.flatMap((m: any) => m.lessons || []).find((l: any) => l.id === lessonId);
+    if (lessonFromModules && typeof (lessonFromModules as any).unlocked !== 'undefined') {
+      return !(lessonFromModules as any).unlocked;
+    }
+
     const lessonIndex = allLessons.findIndex(l => l.id === lessonId);
     if (lessonIndex <= 0) {
-      const lesson = allLessons[0];
-      if (!lesson) return false;
-      if (isModuleLocked(lesson.moduleId)) return true;
-      return !placementCompleted;
+      const firstLesson = allLessons[0];
+      if (!firstLesson) return false;
+      if (lessonId === firstLesson.id) {
+        if (isModuleLocked(firstLesson.moduleId || firstLesson.module_id)) return true;
+        return !placementCompleted;
+      }
+      return false;
     }
     
     const previousLesson = allLessons[lessonIndex - 1];

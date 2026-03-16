@@ -1,8 +1,8 @@
 import { useParams, Link } from "wouter";
 import { useLesson, useRunChallenge } from "@/hooks/use-lessons";
-import { useProgress, useUpdateProgress } from "@/hooks/use-progress";
+import { useUserProgress, useUpdateProgress } from "@/hooks/use-progress";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Play, ChevronRight, AlertCircle, RotateCcw, Code2 } from "lucide-react";
+import { Loader2, Play, ChevronRight, AlertCircle, RotateCcw, Code2, Bot, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Editor } from "@/components/Editor";
 import { useMastery } from "@/hooks/use-mastery";
@@ -14,13 +14,14 @@ import { useQuery } from "@tanstack/react-query";
 import { apiUrl, getAccessToken } from "@/lib/api";
 import { useModules } from "@/hooks/use-modules";
 import { Layout } from "@/components/Layout";
+import { cn } from "@/lib/utils";
 
 const ChatTutor = lazy(() => import("@/components/ChatTutor").then((mod) => ({ default: mod.ChatTutor })));
 
 export default function LessonView() {
   const { id } = useParams();
   const lessonId = Number(id);
-  const { data: lesson, isLoading, error, refetch } = useLesson(lessonId);
+  const { data: lesson, isLoading, error: lessonFetchError, refetch } = useLesson(lessonId);
   const { data: modules, isLoading: loadingModules } = useModules();
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
     queryKey: ["/api/quiz-attempts"],
@@ -35,7 +36,7 @@ export default function LessonView() {
       return res.json();
     },
   });
-  const { data: progress, isLoading: loadingProgress } = useProgress();
+  const { data: progress, isLoading: loadingProgress } = useUserProgress();
   const runMutation = useRunChallenge();
   const progressMutation = useUpdateProgress();
   const { user } = useAuth();
@@ -99,6 +100,10 @@ export default function LessonView() {
   }, [modules, moduleLevels, user?.level]);
   const firstLessonId = allLessons[0]?.id || 1;
 
+  const currentLessonIndex = allLessons.findIndex(l => l.id === lessonId);
+  const prevLessonId = currentLessonIndex > 0 ? allLessons[currentLessonIndex - 1].id : null;
+  const nextLessonId = currentLessonIndex >= 0 && currentLessonIndex < allLessons.length - 1 ? allLessons[currentLessonIndex + 1].id : null;
+
   const isLessonCompleted = (id: number) => {
     return progress?.find(p => p.lessonId === id)?.completed;
   };
@@ -121,13 +126,26 @@ export default function LessonView() {
   };
 
   const isLessonLocked = (id: number) => {
+    // If it's the current lesson and the API says it's unlocked, trust it.
+    if (id === lessonId && lesson && typeof (lesson as any).unlocked !== 'undefined') {
+      return !(lesson as any).unlocked;
+    }
+
     const lessonIndex = allLessons.findIndex(l => l.id === id);
     if (lessonIndex <= 0) {
-      const lesson = allLessons[0];
-      if (!lesson) return false;
-      if (isModuleLocked(lesson.moduleId)) return true;
-      return !placementCompleted;
+      const firstLesson = allLessons[0];
+      if (!firstLesson) return false;
+      if (id === firstLesson.id) {
+        if (isModuleLocked(firstLesson.moduleId)) return true;
+        return !placementCompleted;
+      }
+      // If not the first lesson and not found in allLessons, something is wrong with level filtering.
+      // Default to checking if the lesson's module is locked.
+      const l = modules?.flatMap((m: any) => m.lessons || []).find((l: any) => l.id === id);
+      if (l && isModuleLocked(l.moduleId)) return true;
+      return false;
     }
+    
     const previousLesson = allLessons[lessonIndex - 1];
     return !isLessonCompleted(previousLesson.id);
   };
@@ -146,12 +164,14 @@ export default function LessonView() {
     };
   }, [lesson]);
 
-  // Initialize code when lesson loads
+  // Initialize code when lesson loads - empty by default to encourage active learning
   useEffect(() => {
     if (lesson?.challenges?.[0]) {
-      setCode(lesson.challenges[0].initialCode);
+      setCode("");
     }
   }, [lesson]);
+
+  const [quizResults, setQuizResults] = useState<Record<string, { selected: number; correct: boolean }>>({});
 
   const handleRun = async () => {
     if (!lesson?.challenges?.[0]) return;
@@ -162,10 +182,10 @@ export default function LessonView() {
     try {
       const result = await runMutation.mutateAsync({
         id: lesson.challenges[0].id,
-        code
+        code: code || ""
       });
       
-      setOutput(result.output);
+      setOutput(result.output || "");
       
       if (result.error) {
         setError(result.error);
@@ -210,8 +230,8 @@ export default function LessonView() {
       </div>
     );
   }
-  const lessonErrorStatus = (error as any)?.status;
-  const lessonErrorMessage = (error as any)?.message || "Unable to load lesson content";
+  const lessonErrorStatus = (lessonFetchError as any)?.status;
+  const lessonErrorMessage = (lessonFetchError as any)?.message || "Unable to load lesson content";
 
   if (!lesson) {
     let title = "Unable to load lesson content";
@@ -317,6 +337,28 @@ export default function LessonView() {
         </div>
         
         <div className="flex items-center gap-3">
+           <div className="flex items-center gap-2 mr-4">
+             {prevLessonId && (
+               <Link href={`/lesson/${prevLessonId}`}>
+                 <button className="p-2 hover:bg-muted rounded-lg transition-colors border border-border flex items-center gap-1 text-sm font-medium" title="Previous Lesson">
+                   <ChevronRight className="w-4 h-4 rotate-180" />
+                   <span>Previous</span>
+                 </button>
+               </Link>
+             )}
+             {nextLessonId && (
+               <Link href={`/lesson/${nextLessonId}`}>
+                 <button 
+                   disabled={!isLessonCompleted(lessonId)}
+                   className="p-2 hover:bg-muted rounded-lg transition-colors border border-border flex items-center gap-1 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" 
+                   title={isLessonCompleted(lessonId) ? "Next Lesson" : "Complete challenge to unlock next lesson"}
+                 >
+                   <span>Next</span>
+                   <ChevronRight className="w-4 h-4" />
+                 </button>
+               </Link>
+             )}
+           </div>
            {/* Progress Indicator */}
            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full">
              <span>Level: {lesson.difficulty}</span>
@@ -348,60 +390,93 @@ export default function LessonView() {
                 {masteryImpact ? ` · Impact +${Math.round(masteryImpact * 100)}%` : ""}
               </div>
             </div>
-             <div className="grid md:grid-cols-2 gap-4 mb-6">
-               <div className="p-4 rounded-xl border border-border bg-card">
-                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Explanation</div>
-                 <div className="text-sm text-muted-foreground">{lessonSections.explanation}</div>
-               </div>
-               <div className="p-4 rounded-xl border border-border bg-card">
-                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Syntax</div>
-                 <pre className="text-xs bg-muted/50 rounded-lg p-3 overflow-x-auto">{lessonSections.syntax}</pre>
-               </div>
-               <div className="p-4 rounded-xl border border-border bg-card">
-                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Example</div>
-                 <pre className="text-xs bg-muted/50 rounded-lg p-3 overflow-x-auto">{lessonSections.example}</pre>
-               </div>
-               <div className="p-4 rounded-xl border border-border bg-card">
-                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Practice</div>
-                 <div className="text-sm text-muted-foreground">{lessonSections.practice}</div>
-               </div>
-             </div>
+             
              <ReactMarkdown>{lesson.content}</ReactMarkdown>
             
             {(lesson as any)?.quizzes?.length > 0 && (
-              <div className="mt-8 p-6 border border-border rounded-xl bg-card">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold">Lesson Quiz</h3>
-                  {String((lesson as any).quizzes?.[0]?.title || "").includes("AI Generated") && (
-                    <div className="text-xs px-2 py-1 rounded bg-accent/10 text-accent border border-accent/30">
-                      AI Generated Quiz
-                    </div>
-                  )}
+              <div className="mt-12 p-8 border border-border rounded-2xl bg-card shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold tracking-tight">Check Your Knowledge</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Select the correct option for each question to test your understanding.</p>
+                  </div>
+                  <Bot className="w-5 h-5 text-primary opacity-50" />
                 </div>
-                <div className="mt-4 space-y-4">
-                  {((lesson as any).quizzes?.[0]?.questions || []).map((q: any, idx: number) => (
-                    <div key={`q-${idx}`} className="space-y-2">
-                      <div className="font-medium">{idx + 1}. {q.text}</div>
-                      <div className="grid gap-2">
-                        {(q.options || []).map((opt: any, i: number) => (
-                          <label key={`q-${idx}-o-${i}`} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:border-primary/60">
-                            <input type="radio" name={`ai-quiz-q-${idx}`} disabled />
-                            <span>{opt.text}</span>
-                          </label>
-                        ))}
+                
+                <div className="space-y-8">
+                  {((lesson as any).quizzes?.[0]?.questions || []).map((q: any, qIdx: number) => {
+                    const result = quizResults[`${lesson.id}-${qIdx}`];
+                    return (
+                      <div key={`q-${qIdx}`} className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold mt-0.5">
+                            {qIdx + 1}
+                          </span>
+                          <h4 className="font-semibold text-base leading-snug">{q.text}</h4>
+                        </div>
+                        
+                        <div className="grid gap-3 pl-9">
+                          {(q.options || []).map((opt: any, oIdx: number) => {
+                            const isSelected = result?.selected === oIdx;
+                            const isCorrect = q.correct_option_idx !== undefined ? oIdx === q.correct_option_idx : oIdx === q.correct;
+                            const showSuccess = isSelected && isCorrect;
+                            const showError = isSelected && !isCorrect;
+
+                            return (
+                              <button
+                                key={`q-${qIdx}-o-${oIdx}`}
+                                onClick={() => {
+                                  if (result) return; // Prevent multiple attempts for now
+                                  const correct = q.correct_option_idx !== undefined ? oIdx === q.correct_option_idx : oIdx === q.correct;
+                                  setQuizResults(prev => ({
+                                    ...prev,
+                                    [`${lesson.id}-${qIdx}`]: { selected: oIdx, correct }
+                                  }));
+                                }}
+                                disabled={!!result}
+                                className={cn(
+                                  "flex items-center justify-between p-4 border rounded-xl transition-all duration-200 text-left group",
+                                  !result && "hover:border-primary/50 hover:bg-primary/5",
+                                  showSuccess && "border-green-500 bg-green-500/10",
+                                  showError && "border-destructive bg-destructive/10",
+                                  result && !isSelected && "opacity-60 grayscale-[0.5]"
+                                )}
+                              >
+                                <span className="text-sm font-medium">{opt.text}</span>
+                                {showSuccess && (
+                                  <div className="flex items-center gap-2 text-green-600 font-bold text-xs uppercase tracking-wider">
+                                    <span>Correct</span>
+                                    <RotateCcw className="w-4 h-4 rotate-45" />
+                                  </div>
+                                )}
+                                {showError && (
+                                  <div className="flex items-center gap-2 text-destructive font-bold text-xs uppercase tracking-wider">
+                                    <span>Try Again</span>
+                                    <X className="w-4 h-4" />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
              
              {lesson.challenges?.[0] && (
-               <div className="mt-8 p-6 bg-primary/5 border border-primary/20 rounded-xl">
-                 <h3 className="text-lg font-bold text-primary mb-2 flex items-center gap-2">
-                   <Code2 className="w-5 h-5" /> Challenge
+               <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-2xl relative overflow-hidden group">
+                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                   <Code2 className="w-16 h-16" />
+                 </div>
+                 <h3 className="text-lg font-bold text-primary mb-3 flex items-center gap-2">
+                   <Sparkles className="w-5 h-5" /> Active Learning Challenge
                  </h3>
-                 <ReactMarkdown>{lesson.challenges[0].description}</ReactMarkdown>
+                 <div className="markdown-content prose prose-sm dark:prose-invert max-w-none">
+                   <ReactMarkdown>{lesson.challenges[0].description}</ReactMarkdown>
+                 </div>
                </div>
              )}
           </div>

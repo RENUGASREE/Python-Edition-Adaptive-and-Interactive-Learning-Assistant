@@ -161,40 +161,56 @@ def retrieve_context(query: str, top_k: int = 3, topic: Optional[str] = None) ->
     if cached:
         return cached
     start = time.perf_counter()
-    query_vec = embed_text(query)
+    
+    try:
+        query_vec = embed_text(query)
+    except Exception as exc:
+        logger.error(f"Embedding generation failed: {exc}")
+        return []
+
     queryset = LessonChunk.objects.all()
     if topic:
         queryset = queryset.filter(topic=topic)
 
-    try:
-        from pgvector.django import CosineDistance, L2Distance
+    if not queryset.exists():
+        return []
 
-        if metric == "l2":
-            queryset = queryset.annotate(distance=L2Distance("embedding_vector", query_vec))
+    try:
+        from django.conf import settings
+        use_pgvector = "pgvector.django" in settings.INSTALLED_APPS and os.getenv("PGVECTOR_ENABLED", "true").lower() == "true"
+        
+        if use_pgvector:
+            from pgvector.django import CosineDistance, L2Distance
+            if metric == "l2":
+                queryset = queryset.annotate(distance=L2Distance("embedding_vector", query_vec))
+            else:
+                queryset = queryset.annotate(distance=CosineDistance("embedding_vector", query_vec))
+            results = list(queryset.order_by("distance")[:top_k])
+            use_distance = True
         else:
-            queryset = queryset.annotate(distance=CosineDistance("embedding_vector", query_vec))
-        results = list(queryset.order_by("distance")[:top_k])
-        use_distance = True
-    except Exception as exc:
-        logger.warning("pgvector retrieval failed; falling back to python similarity", extra={"topic": topic})
-        logger.warning(str(exc))
+            raise ImportError("pgvector not enabled or installed")
+    except (Exception, ImportError) as exc:
+        logger.info("Falling back to python similarity search")
         use_distance = False
-        max_candidates = int(os.getenv("EMBEDDING_FALLBACK_CANDIDATES", "500"))
+        max_candidates = int(os.getenv("EMBEDDING_FALLBACK_CANDIDATES", "100")) # Reduced from 500 for speed
         candidates = list(queryset.order_by("-created_at")[:max_candidates])
 
         def _cosine(a: List[float], b: List[float]) -> float:
-            dot = 0.0
-            na = 0.0
-            nb = 0.0
-            for x, y in zip(a, b):
-                fx = float(x)
-                fy = float(y)
-                dot += fx * fy
-                na += fx * fx
-                nb += fy * fy
-            if na <= 0.0 or nb <= 0.0:
+            try:
+                dot = 0.0
+                na = 0.0
+                nb = 0.0
+                for x, y in zip(a, b):
+                    fx = float(x)
+                    fy = float(y)
+                    dot += fx * fy
+                    na += fx * fx
+                    nb += fy * fy
+                if na <= 0.0 or nb <= 0.0:
+                    return 0.0
+                return dot / ((na ** 0.5) * (nb ** 0.5))
+            except Exception:
                 return 0.0
-            return dot / ((na ** 0.5) * (nb ** 0.5))
 
         scored = []
         for chunk in candidates:
@@ -205,67 +221,83 @@ def retrieve_context(query: str, top_k: int = 3, topic: Optional[str] = None) ->
             scored.append((similarity, chunk))
         scored.sort(key=lambda item: item[0], reverse=True)
         results = [chunk for _, chunk in scored[:top_k]]
-    threshold = float(os.getenv("EMBEDDING_MIN_SIMILARITY", "0.2"))
+    
+    threshold = float(os.getenv("EMBEDDING_MIN_SIMILARITY", "0.1")) # Lowered threshold slightly
     response = []
     for chunk in results:
+        similarity = 0.0
         if use_distance:
             distance = getattr(chunk, "distance", None)
-            if distance is None:
-                continue
-            similarity = _similarity_from_distance(float(distance), metric)
+            if distance is not None:
+                similarity = _similarity_from_distance(float(distance), metric)
         else:
             vec = getattr(chunk, "embedding_vector", None) or []
-            if not isinstance(vec, list) or not vec:
-                continue
-            # approximate similarity already computed for ordering; recompute here for consistency
-            similarity = 0.0
-            try:
-                dot = sum(float(x) * float(y) for x, y in zip(query_vec, vec))
-                na = sum(float(x) * float(x) for x in query_vec)
-                nb = sum(float(y) * float(y) for y in vec)
-                similarity = dot / ((na ** 0.5) * (nb ** 0.5)) if na > 0.0 and nb > 0.0 else 0.0
-            except Exception:
-                similarity = 0.0
+            if isinstance(vec, list) and vec:
+                similarity = _cosine(query_vec, vec)
+        
         if similarity < threshold:
             continue
+            
         response.append({
             "topic": chunk.topic,
             "content": chunk.content,
             "similarity": round(similarity, 4),
         })
+    
     duration = round(time.perf_counter() - start, 4)
-    logger.info("Retrieval timing", extra={"duration_seconds": duration, "metric": metric, "results": len(response)})
+    logger.info(f"Retrieval finished in {duration}s with {len(response)} results")
     cache.set(cache_key, response, timeout=cache_ttl)
     return response
 
 
 def answer_with_rag(query: str, topic: Optional[str] = None):
+    query_lower = query.lower()
     results = retrieve_context(query, topic=topic)
+    
+    # Base response structure
+    response_parts = []
+    
+    if "hint" in query_lower:
+        response_parts.append("### 💡 Helpful Hint")
+    elif "debug" in query_lower or "error" in query_lower or "wrong" in query_lower:
+        response_parts.append("### 🔍 Debugging Assistance")
+    elif "explain" in query_lower or "what is" in query_lower:
+        response_parts.append("### 📖 Concept Explanation")
+    else:
+        response_parts.append("### 👋 AI Tutor Assistance")
+
     if not results:
+        # Fallback if no specific lesson chunk found
+        response_parts.append("I couldn't find a specific lesson chunk for this, but I'm here to help! Could you please share the specific part of the code you're working on or the error you're seeing?")
         return {
-            "response": "I could not find relevant lesson content yet.",
-            "source_topic": None,
-            "confidence_score": 0.1,
-            "sources": [],
-            "similarity_metric": _distance_metric(),
-            "min_similarity": float(os.getenv("EMBEDDING_MIN_SIMILARITY", "0.2")),
+            "response": "\n\n".join(response_parts),
+            "source_topic": topic,
+            "confidence_score": 0.3,
+            "sources": []
         }
-    combined = "\n\n".join(entry["content"] for entry in results)
-    topic = results[0]["topic"]
-    confidence = 0.6 + (0.1 * min(len(results), 3))
-    sources = results
-    response = "\n\n".join([
-        "Based on the lesson content:",
-        combined,
-        f"Focus on {topic} concepts and try a small example to verify your understanding.",
-    ])
+
+    combined_content = "\n\n".join(entry["content"] for entry in results)
+    main_topic = results[0]["topic"]
+    
+    if "hint" in query_lower:
+        response_parts.append(f"For the **{main_topic}** challenge, think about how you can use the core concept discussed in the lesson.")
+        response_parts.append("Try breaking the problem into smaller steps. What is the first thing your code needs to do?")
+    elif "debug" in query_lower or "error" in query_lower:
+        response_parts.append("When debugging Python, always check:")
+        response_parts.append("- **Indentation**: Is your code correctly aligned?")
+        response_parts.append("- **Syntax**: Did you forget a colon `:` or a parenthesis `)`?")
+        response_parts.append("- **Variables**: Are you using the correct variable names?")
+        response_parts.append("\nIf you share your code, I can help point out where it might be going wrong!")
+    else:
+        response_parts.append(f"Let's look at **{main_topic}**:")
+        response_parts.append(combined_content)
+        response_parts.append("\nDoes that clarify things, or would you like a specific example?")
+
     return {
-        "response": response,
-        "source_topic": topic,
-        "confidence_score": round(confidence, 2),
-        "sources": sources,
-        "similarity_metric": _distance_metric(),
-        "min_similarity": float(os.getenv("EMBEDDING_MIN_SIMILARITY", "0.2")),
+        "response": "\n\n".join(response_parts),
+        "source_topic": main_topic,
+        "confidence_score": 0.8,
+        "sources": results
     }
 
 

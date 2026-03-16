@@ -11,8 +11,9 @@ from gamification.models import XpEvent, Streak
 from recommendation.services import normalize_topic
 
 class UserSerializer(serializers.ModelSerializer):
-    firstName = serializers.CharField(source='first_name', required=False)
-    lastName = serializers.CharField(source='last_name', required=False)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    firstName = serializers.CharField(source='first_name', required=False, allow_blank=True)
+    lastName = serializers.CharField(source='last_name', required=False, allow_blank=True)
     masteryVector = serializers.JSONField(source='mastery_vector', required=False)
     stats = serializers.SerializerMethodField()
     achievements = serializers.SerializerMethodField()
@@ -199,7 +200,7 @@ class ChallengeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Challenge
-        fields = ('id', 'lessonId', 'title', 'description', 'initialCode', 'solutionCode', 'testCases', 'points')
+        fields = ('id', 'lessonId', 'title', 'description', 'initialCode', 'solutionCode', 'testCases', 'points', 'difficulty')
 
 # Forward declaration or separate serializer to avoid circular dependency
 class SimpleModuleSerializer(serializers.ModelSerializer):
@@ -214,19 +215,66 @@ class LessonSerializer(serializers.ModelSerializer):
     quizzes = serializers.SerializerMethodField()
     challenges = serializers.SerializerMethodField()
     module = serializers.SerializerMethodField() 
+    unlocked = serializers.SerializerMethodField()
+    completed = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
-        fields = ('id', 'moduleId', 'title', 'slug', 'content', 'order', 'difficulty', 'duration', 'quizzes', 'challenges', 'module')
+        fields = ('id', 'moduleId', 'title', 'slug', 'content', 'order', 'difficulty', 'duration', 'quizzes', 'challenges', 'module', 'unlocked', 'completed')
+
+    def get_unlocked(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        # Import here to avoid circular dependencies if any
+        from .views import _lesson_unlocked
+        return _lesson_unlocked(request.user, obj)
+
+    def get_completed(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        from .views import _progress_user_id, UserProgress
+        user_id = _progress_user_id(request.user)
+        return UserProgress.objects.filter(user_id=user_id, lesson_id=obj.id, completed=True).exists()
 
     def get_quizzes(self, obj):
+        request = self.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+        
         quizzes = Quiz.objects.filter(lesson_id=obj.id)
+        if not quizzes.exists():
+            # Fallback: Return a dynamic quiz if none exists in DB
+            from .services.ai_quiz_generator import generate_quiz_from_lesson
+            dynamic_questions = generate_quiz_from_lesson(obj)
+            return [{
+                "id": -obj.id, # Negative ID to distinguish from real DB quizzes
+                "title": f"Lesson Checkpoint: {obj.title}",
+                "questions": [
+                    {
+                        "id": -(obj.id * 100 + idx),
+                        "text": q["question"],
+                        "options": [{"id": i, "text": opt} for i, opt in enumerate(q["options"])],
+                        "correct_option_idx": q["correct"],
+                        "points": 10
+                    } for idx, q in enumerate(dynamic_questions)
+                ],
+                "attempted": False,
+                "score": None,
+                "total_questions": len(dynamic_questions),
+            }]
+
         quiz_data = []
         for quiz in quizzes:
-            attempt = QuizAttempt.objects.filter(user=self.context['request'].user, quiz=quiz).first()
+            attempt = None
+            if user:
+                attempt = QuizAttempt.objects.filter(user=user, quiz=quiz).first()
+            
+            questions = Question.objects.filter(quiz_id=quiz.id)
             quiz_data.append({
                 "id": quiz.id,
                 "title": quiz.title,
+                "questions": QuestionSerializer(questions, many=True).data,
                 "attempted": attempt is not None,
                 "score": attempt.score if attempt else None,
                 "total_questions": attempt.total_questions if attempt else None,
@@ -279,50 +327,19 @@ class ModuleSerializer(serializers.ModelSerializer):
         user = request.user if request else None
         if not user or not user.is_authenticated:
             return []
-        quiz_ok = bool(getattr(user, "has_taken_quiz", False) or getattr(user, "diagnostic_completed", False))
-        if not quiz_ok:
-            try:
-                from assessments.models import DiagnosticQuizAttempt
-                quiz_ok = DiagnosticQuizAttempt.objects.filter(user=user, status="COMPLETED").exists()
-            except Exception:
-                quiz_ok = False
-        if not quiz_ok:
-            return []
-        if obj.order != 1:
-            previous = Module.objects.filter(order=obj.order - 1).first()
-            if previous:
-                prev_attempts = QuizAttempt.objects.filter(user=user).order_by("created_at")
-                prev_level_map = {}
-                for attempt in prev_attempts:
-                    match = re.search(r"module:(\d+):level:([A-Za-z]+)", attempt.notes or "")
-                    if match:
-                        prev_level_map[int(match.group(1))] = match.group(2)
-                prev_level = prev_level_map.get(previous.id) or user.level or "Beginner"
-                prev_normalized = prev_level.strip().lower()
-                if prev_normalized == "advanced":
-                    prev_normalized = "Pro"
-                elif prev_normalized == "intermediate":
-                    prev_normalized = "Intermediate"
-                else:
-                    prev_normalized = "Beginner"
-                lesson_ids = list(Lesson.objects.filter(module_id=previous.id, difficulty=prev_normalized).values_list("id", flat=True))
-                if not lesson_ids:
-                    lesson_ids = list(Lesson.objects.filter(module_id=previous.id).values_list("id", flat=True))
-                if lesson_ids:
-                    user_id = user.original_uuid or str(user.id)
-                    completed_count = UserProgress.objects.filter(
-                        user_id=user_id,
-                        lesson_id__in=lesson_ids,
-                        completed=True,
-                    ).count()
-                    if completed_count != len(lesson_ids):
-                        return []
-        attempts = QuizAttempt.objects.filter(user=user).order_by("created_at")
+        
+        # Determine target level from quiz attempts notes
+        # In this project, 'QuizAttempt' refers to the model tracking results.
+        # We need to filter by user and order by date.
+        from .models import QuizAttempt as CoreQuizAttempt
+        attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
         level_map = {}
         for attempt in attempts:
-            match = re.search(r"module:(\d+):level:([A-Za-z]+)", attempt.notes or "")
+            notes = attempt.notes or ""
+            match = re.search(r"module:(\d+):level:([A-Za-z]+)", notes)
             if match:
                 level_map[int(match.group(1))] = match.group(2)
+        
         target_level = level_map.get(obj.id) or user.level or "Beginner"
         normalized = target_level.strip().lower()
         if normalized == "advanced":
@@ -331,36 +348,40 @@ class ModuleSerializer(serializers.ModelSerializer):
             normalized = "Intermediate"
         else:
             normalized = "Beginner"
+            
         lessons = list(Lesson.objects.filter(module_id=obj.id, difficulty=normalized).order_by('order'))
         if not lessons:
             lessons = list(Lesson.objects.filter(module_id=obj.id).order_by('order'))
+            
         user_id = user.original_uuid or str(user.id)
         completed_ids = set(UserProgress.objects.filter(
             user_id=user_id,
             lesson_id__in=[lesson.id for lesson in lessons],
             completed=True,
         ).values_list("lesson_id", flat=True))
+        
         prereq_map = {
             item["lesson_id"]: (item["prerequisites"] or [])
             for item in LessonProfile.objects.filter(lesson_id__in=[lesson.id for lesson in lessons]).values("lesson_id", "prerequisites")
         }
+        
         unlocked = []
         for lesson in lessons:
-            previous = next((l for l in lessons if l.order == lesson.order - 1), None)
-            prereqs = prereq_map.get(lesson.id, []) or []
-            try:
-                prereq_ids = [int(val) for val in prereqs]
-            except Exception:
-                prereq_ids = []
-                for val in prereqs:
-                    try:
-                        prereq_ids.append(int(val))
-                    except Exception:
-                        continue
-            prereq_ok = (not prereq_ids) or all(pid in completed_ids for pid in prereq_ids)
-            if prereq_ok and (not previous or previous.id in completed_ids):
-                unlocked.append(lesson)
-        return SimpleLessonSerializer(unlocked, many=True).data
+            is_unlocked = True
+            prereqs = prereq_map.get(lesson.id, [])
+            if prereqs:
+                for pre_id in prereqs:
+                    if pre_id not in completed_ids:
+                        is_unlocked = False
+                        break
+            
+            # Use SimpleLessonSerializer if LessonSerializer causes circular issues
+            # For now, ensuring LessonSerializer is available
+            data = LessonSerializer(lesson, context=self.context).data
+            data["unlocked"] = is_unlocked
+            data["completed"] = lesson.id in completed_ids
+            unlocked.append(data)
+        return unlocked
 
 # --- End Content Serializers ---
 

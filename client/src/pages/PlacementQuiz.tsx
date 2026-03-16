@@ -45,7 +45,7 @@ export default function PlacementQuiz() {
     queryKey: ["/api/diagnostic"],
     queryFn: async () => {
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/diagnostic"), {
+      const res = await fetch(apiUrl("/diagnostic/"), {
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
@@ -53,6 +53,7 @@ export default function PlacementQuiz() {
       if (!res.ok) throw new Error("Failed to fetch quiz attempts");
       return res.json();
     },
+    enabled: !!user,
   });
 
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -62,6 +63,7 @@ export default function PlacementQuiz() {
   const [expired, setExpired] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
   const [tabWarning, setTabWarning] = useState(false);
+  const [violationDialog, setViolationDialog] = useState(false);
   const [warningMessage, setWarningMessage] = useState<string>("");
   const [attemptId, setAttemptId] = useState<number | null>(null);
   const { toast } = useToast();
@@ -203,7 +205,10 @@ export default function PlacementQuiz() {
     try {
       setSubmitting(true);
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/diagnostic/submit"), {
+      if (!accessToken) {
+        console.warn("No access token found for diagnostic submission");
+      }
+      const res = await fetch(apiUrl("/diagnostic/submit/"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -220,17 +225,29 @@ export default function PlacementQuiz() {
         credentials: "include",
       });
       if (!res.ok) {
+        if (res.status === 409) {
+          // Conflict usually means attempt already submitted or locked
+          await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+          setLocation("/dashboard");
+          return;
+        }
         throw new Error("Failed to submit diagnostic quiz");
       }
       const data = await res.json();
       await queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
-      toast({
-        title: data?.timeUp ? "Time is up. Your quiz has been submitted." : "Placement quiz completed",
-        description: `Score: ${Math.round((data?.weightedScore || data?.overallScore || 0) * 100)}%`,
-      });
-      setExpired(true);
-      setTimeout(() => setLocation("/dashboard"), 400);
+      
+      if (violationCount >= 3) {
+        setViolationDialog(true);
+        setExpired(true);
+      } else {
+        toast({
+          title: data?.timeUp ? "Time is up. Your quiz has been submitted." : "Placement quiz completed",
+          description: `Score: ${Math.round((data?.weightedScore || data?.overallScore || 0) * 100)}%`,
+        });
+        setExpired(true);
+        setTimeout(() => setLocation("/dashboard"), 400);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to submit diagnostic quiz");
     } finally {
@@ -242,7 +259,7 @@ export default function PlacementQuiz() {
     setError(null);
     try {
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/diagnostic/start"), {
+      const res = await fetch(apiUrl("/diagnostic/start/"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -268,7 +285,7 @@ export default function PlacementQuiz() {
   const cancelAttempt = async () => {
     try {
       const accessToken = getAccessToken();
-      await fetch(apiUrl("/diagnostic/cancel"), {
+      await fetch(apiUrl("/diagnostic/cancel/"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -375,6 +392,23 @@ export default function PlacementQuiz() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogAction>Continue</AlertDialogAction>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={violationDialog} onOpenChange={setViolationDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive flex items-center gap-2">
+                Quiz Terminated
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-foreground font-medium">
+                Your placement quiz has been automatically submitted due to repeated tab-switching violations. 
+                <br /><br />
+                You will need to reattempt the quiz from the dashboard to unlock your personalized learning path.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogAction onClick={() => setLocation("/dashboard")}>
+              Go to Dashboard
+            </AlertDialogAction>
           </AlertDialogContent>
         </AlertDialog>
         <AlertDialog open={submitConfirm} onOpenChange={setSubmitConfirm}>

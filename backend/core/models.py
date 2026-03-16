@@ -80,9 +80,10 @@ class UserProgress(models.Model):
 
 class QuizAttempt(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, null=True, blank=True)
     score = models.IntegerField()
-    total_questions = models.IntegerField()
+    total_questions = models.IntegerField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
     completed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -120,12 +121,6 @@ class DiagnosticQuestionMeta(models.Model):
     question_id = models.IntegerField(unique=True)
     module_tag = models.CharField(max_length=100)
     difficulty = models.CharField(max_length=50)
-
-class QuizAttempt(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    score = models.IntegerField()
-    notes = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
 
 class Badge(models.Model):
     name = models.CharField(max_length=255, unique=True)

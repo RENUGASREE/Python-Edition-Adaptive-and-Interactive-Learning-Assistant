@@ -41,7 +41,7 @@ export function Layout({ children }: LayoutProps) {
     { href: "/curriculum", label: "Curriculum", icon: BookOpen },
     { href: "/achievements", label: "Achievements", icon: Trophy },
     { href: "/analytics", label: "Analytics", icon: BrainCircuit },
-    { href: "/challenges", label: "Challenges", icon: BrainCircuit },
+    { href: "/challenges", label: "Challenges", icon: Terminal },
   ];
 
   return (
@@ -118,7 +118,7 @@ export function Layout({ children }: LayoutProps) {
                   )}
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <p className="font-medium truncate text-sm">{user?.firstName || 'User'}</p>
+                  <p className="font-medium truncate text-sm">{user?.firstName || user?.username || 'User'}</p>
                   <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                 </div>
               </div>

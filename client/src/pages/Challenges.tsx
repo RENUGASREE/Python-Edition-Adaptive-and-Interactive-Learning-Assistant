@@ -11,6 +11,7 @@ type Challenge = {
   description: string;
   difficulty?: string | null;
   initialCode: string;
+  solutionCode?: string | null;
   testCases: any;
 };
 
@@ -32,21 +33,23 @@ export default function Challenges() {
   const [code, setCode] = useState("");
   const [output, setOutput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showSolution, setShowSolution] = useState(false);
 
   const groups: Record<string, Challenge[]> = { Easy: [], Medium: [], Hard: [], Other: [] };
   (data || []).forEach((c) => {
     const d = (c.difficulty || "").toLowerCase();
-    if (d.includes("easy")) groups.Easy.push(c);
-    else if (d.includes("medium")) groups.Medium.push(c);
-    else if (d.includes("hard")) groups.Hard.push(c);
+    if (d.includes("beginner") || d.includes("easy")) groups.Easy.push(c);
+    else if (d.includes("intermediate") || d.includes("medium")) groups.Medium.push(c);
+    else if (d.includes("advanced") || d.includes("hard") || d.includes("pro")) groups.Hard.push(c);
     else groups.Other.push(c);
   });
 
   const handleSelect = (c: Challenge) => {
     setSelected(c);
-    setCode(c.initialCode || "");
+    setCode(""); // Empty by default to encourage active learning
     setOutput("");
     setError(null);
+    setShowSolution(false);
   };
 
   const handleRun = async () => {
@@ -57,6 +60,9 @@ export default function Challenges() {
       const result = await run.mutateAsync({ id: selected.id, code });
       setOutput(result.output || "");
       if (result.error) setError(result.error);
+      else if (result.passed) {
+        setOutput((prev) => prev + "\n\n✅ All tests passed!");
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to run");
     }
@@ -121,7 +127,21 @@ export default function Challenges() {
                 >
                   {run.isPending ? "Running..." : "Run Code"}
                 </button>
+                {selected.solutionCode && (
+                  <button
+                    onClick={() => setShowSolution(!showSolution)}
+                    className="px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted"
+                  >
+                    {showSolution ? "Hide Answer" : "Show Answer"}
+                  </button>
+                )}
               </div>
+              {showSolution && selected.solutionCode && (
+                <div className="p-4 rounded-lg bg-accent/10 border border-accent/20">
+                  <div className="text-sm font-semibold mb-2">Reference Solution</div>
+                  <pre className="text-xs font-mono text-accent whitespace-pre-wrap">{selected.solutionCode}</pre>
+                </div>
+              )}
               <div className="p-3 rounded-lg border border-border">
                 <div className="text-sm font-medium">Output</div>
                 <pre className="text-xs whitespace-pre-wrap mt-2">{output || " "}</pre>

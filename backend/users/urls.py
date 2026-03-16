@@ -3,5 +3,5 @@ from .views import UserMetricsView
 
 
 urlpatterns = [
-    path("metrics", UserMetricsView.as_view(), name="user_metrics"),
+    path("metrics/", UserMetricsView.as_view(), name="user_metrics"),
 ]

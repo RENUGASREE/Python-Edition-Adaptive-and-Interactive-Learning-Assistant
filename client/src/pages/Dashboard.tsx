@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useProgress } from "@/hooks/use-progress";
+import { useUserProgress } from "@/hooks/use-progress";
 import { useModules } from "@/hooks/use-modules";
 import { useMastery } from "@/hooks/use-mastery";
 import { useRecommendation } from "@/hooks/use-recommendation";
@@ -32,7 +32,7 @@ import {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { data: progress, isLoading: loadingProgress } = useProgress();
+  const { data: progress, isLoading: loadingProgress } = useUserProgress();
   const { data: modules, isLoading: loadingModules, error: modulesError, refetch: refetchModules } = useModules();
   const { masteryVector, isLoading: loadingMastery } = useMastery();
   const { recommendation, isLoading: loadingRecommendation } = useRecommendation();
@@ -114,8 +114,19 @@ export default function Dashboard() {
       if (a.moduleOrder !== b.moduleOrder) return a.moduleOrder - b.moduleOrder;
       return (a.order || 0) - (b.order || 0);
     });
-    return lessons[0]?.id || 1;
+    return lessons[0]?.id || null;
   }, [modules, moduleLevels, user?.level]);
+
+  useEffect(() => {
+    try {
+      const msg = localStorage.getItem("quizGateMessage");
+      if (msg) {
+        setGateMessage(msg);
+        setGateOpen(true);
+        localStorage.removeItem("quizGateMessage");
+      }
+    } catch {}
+  }, []);
 
   if (loadingProgress || loadingModules || loadingQuizAttempts || loadingMastery || loadingRecommendation) {
     return (
@@ -126,51 +137,20 @@ export default function Dashboard() {
       </Layout>
     );
   }
-  if (!modules) {
-    const status = (modulesError as any)?.status;
-    const message = (modulesError as any)?.message || "Unable to load data";
-    let title = "Unable to load data";
-    let description = "Please refresh the page.";
-    let action = (
-      <button
-        onClick={() => refetchModules()}
-        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-      >
-        Retry
-      </button>
-    );
-
-    if (status === 401) {
-      title = "Authentication required";
-      description = "Please sign in to continue.";
-      action = (
-        <button
-          onClick={() => (window.location.href = "/login")}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-        >
-          Sign in
-        </button>
-      );
-    } else if (status === 403) {
-      title = "Placement test required";
-      description = "Complete the placement quiz to unlock your dashboard.";
-      action = (
-        <button
-          onClick={() => (window.location.href = "/placement-quiz")}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-        >
-          Take placement test
-        </button>
-      );
-    }
-
+  if (!modules || modules.length === 0) {
     return (
       <Layout>
         <div className="max-w-xl mx-auto py-16 px-4 text-center">
-          <h1 className="text-2xl font-bold">{title}</h1>
-          <p className="text-muted-foreground mt-2">{description}</p>
-          <p className="text-xs text-muted-foreground mt-1">{message}</p>
-          <div className="mt-4">{action}</div>
+          <h1 className="text-2xl font-bold">No curriculum available</h1>
+          <p className="text-muted-foreground mt-2">Please complete the placement quiz or contact support.</p>
+          <div className="mt-4">
+            <button
+              onClick={() => setLocation("/placement-quiz")}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Take placement quiz
+            </button>
+          </div>
         </div>
       </Layout>
     );
@@ -248,17 +228,6 @@ export default function Dashboard() {
     { day: 'Sun', score: activityMap.get('Sun') },
   ];
 
-  useEffect(() => {
-    try {
-      const msg = localStorage.getItem("quizGateMessage");
-      if (msg) {
-        setGateMessage(msg);
-        setGateOpen(true);
-        localStorage.removeItem("quizGateMessage");
-      }
-    } catch {}
-  }, []);
-
   return (
     <Layout>
       <AlertDialog open={gateOpen} onOpenChange={setGateOpen}>
@@ -297,7 +266,7 @@ export default function Dashboard() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold text-foreground">
-              Welcome back, {user?.firstName || 'Coder'}! 👋
+              Welcome back, {user?.firstName || user?.username || 'Coder'}! 👋
             </h1>
             <p className="text-muted-foreground mt-1">Ready to continue your Python journey?</p>
           </div>
@@ -323,7 +292,7 @@ export default function Dashboard() {
                 : "Great job! Keep going to master more Python concepts."}
             </p>
             
-            <Link href={!placementCompleted ? "/placement-quiz" : completedLessons === 0 ? `/lesson/${firstLessonId}` : `/lesson/${progress?.find(p => !p.completed)?.lessonId || firstLessonId}`}>
+            <Link href={!placementCompleted ? "/placement-quiz" : completedLessons === 0 ? (firstLessonId ? `/lesson/${firstLessonId}` : "/curriculum") : `/lesson/${progress?.find(p => !p.completed)?.lessonId || firstLessonId || ''}`}>
               <button className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors z-10 relative shadow-lg shadow-primary/20 hover:translate-y-[-2px] active:translate-y-0">
                 {!placementCompleted ? "Take placement quiz" : completedLessons === 0 ? "Start First Lesson" : "Continue Lesson"}
               </button>
