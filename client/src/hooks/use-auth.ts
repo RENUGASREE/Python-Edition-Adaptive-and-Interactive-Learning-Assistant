@@ -42,11 +42,13 @@ async function fetchUser(): Promise<User | null> {
   }
 
   if (response.status === 401) {
+    clearTokens();
     return null;
   }
 
   if (!response.ok) {
-    throw new Error(`${response.status}: ${response.statusText}`);
+    // For other errors, return null instead of throwing to avoid console noise for unauthenticated users
+    return null;
   }
 
   return response.json();

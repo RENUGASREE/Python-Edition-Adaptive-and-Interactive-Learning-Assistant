@@ -64,6 +64,27 @@ def generate_quiz_from_lesson(lesson) -> List[Dict]:
             "correct": 1,
         })
 
+    if _contains(text, ["dict", "{}", "key"]):
+        questions.append({
+            "question": "How do you get a value from a dictionary `d` with key `k`?",
+            "options": ["d(k)", "d.get(k)", "d[k]", "Both d.get(k) and d[k]"],
+            "correct": 3,
+        })
+
+    if _contains(text, ["set", "unique", "add"]):
+        questions.append({
+            "question": "What is a key feature of a Python set?",
+            "options": ["Ordered elements", "Allows duplicate elements", "Stores unique elements", "Key-value pairs"],
+            "correct": 2,
+        })
+
+    if _contains(text, ["string", "slice", "strip"]):
+        questions.append({
+            "question": "What does the `strip()` method do on a string?",
+            "options": ["Removes leading/trailing whitespace", "Converts to uppercase", "Splits the string into a list", "Replaces a substring"],
+            "correct": 0,
+        })
+
     # Fallback generic questions if we have fewer than 3
     if len(questions) < 3:
         questions.append({

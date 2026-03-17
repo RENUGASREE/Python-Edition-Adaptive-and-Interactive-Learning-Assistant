@@ -101,6 +101,25 @@ export default function Certificate() {
             <Button variant="outline">Back to curriculum</Button>
           </Link>
           <Button onClick={() => window.print()}>Print certificate</Button>
+          <Button onClick={async () => {
+            try {
+              const accessToken = getAccessToken();
+              const response = await fetch(apiUrl(`/certificates/${moduleId}/download/`), {
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+              });
+              if (!response.ok) throw new Error("Failed to download certificate");
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `certificate_${user?.username}_${moduleId}.pdf`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+            } catch (err: any) {
+              console.error("Download failed:", err);
+            }
+          }}>Download PDF</Button>
         </div>
       </div>
     </Layout>

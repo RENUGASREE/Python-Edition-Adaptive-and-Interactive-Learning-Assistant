@@ -9,6 +9,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
 from assessments.services import log_assessment_interaction
 from lessons.models import LessonProfile
 from users.services import update_engagement
@@ -25,6 +29,8 @@ import tempfile
 import json
 import re
 import logging
+import openai
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -433,6 +439,9 @@ class RunChallengeView(APIView):
                     cwd=temp_dir,
                     encoding='utf-8'
                 )
+                if "ModuleNotFoundError" in result.stderr:
+                    module_name = result.stderr.split("'")[1]
+                    return result.stdout, f"Error: Module '{module_name}' not found. Please import a valid module."
                 return result.stdout, result.stderr
             finally:
                 if os.path.exists(filepath):
@@ -1012,7 +1021,8 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         if topic is not None and correct is not None:
             log_assessment_interaction(request.user, topic, bool(correct), float(time_spent or 0), int(hints_used or 0), "quiz")
         analyze_user_skill_gaps(request.user)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        output = self.get_serializer(progress).data
+        return Response(output, status=status.HTTP_200_OK)
 
 
 class SubmitQuizView(APIView):
@@ -1106,3 +1116,74 @@ class CertificateViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
+
+class CertificateDownloadView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, module_id):
+        user = request.user
+        try:
+            certificate = Certificate.objects.get(user=user, module_id=module_id)
+        except Certificate.DoesNotExist:
+            return Response({"message": "Certificate not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="certificate_{user.username}_{module_id}.pdf"'
+
+        p = canvas.Canvas(response, pagesize=letter)
+        width, height = letter
+
+        # Certificate content
+        p.setTitle(f"Certificate of Completion - {certificate.module}")
+        p.setFont("Helvetica-Bold", 24)
+        p.drawCentredString(width / 2.0, height - 2 * inch, "Certificate of Completion")
+
+        p.setFont("Helvetica", 12)
+        p.drawCentredString(width / 2.0, height - 3 * inch, "This certifies that")
+
+        p.setFont("Helvetica-Bold", 20)
+        p.drawCentredString(width / 2.0, height - 3.5 * inch, f"{user.first_name} {user.last_name}")
+
+        p.setFont("Helvetica", 12)
+        p.drawCentredString(width / 2.0, height - 4 * inch, f"has successfully completed the module")
+
+        p.setFont("Helvetica-Bold", 16)
+        p.drawCentredString(width / 2.0, height - 4.5 * inch, certificate.module)
+
+        p.setFont("Helvetica", 10)
+        p.drawCentredString(width / 2.0, 2 * inch, f"Issued on: {certificate.issued_at.strftime('%B %d, %Y')}")
+        p.drawCentredString(width / 2.0, 1.5 * inch, f"Certificate ID: {certificate.id}")
+
+        p.showPage()
+        p.save()
+
+        return response
+
+class AITutorView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def post(self, request):
+        query = request.data.get('query')
+        if not query:
+            return Response({'error': 'Query not provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "YOUR_API_KEY"))
+
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful Python tutor."},
+                    {"role": "user", "content": query}
+                ]
+            )
+
+            response_data = {
+                'response': response.choices[0].message.content,
+                'source_topic': 'General',
+                'confidence_score': 0.99
+            }
+            return Response(response_data)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -61,6 +61,9 @@ export function useChat(context?: TutorContext) {
 
       clearTimeout(timeoutId);
 
+      if (response.status === 401) {
+        throw new Error("401");
+      }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Server error: ${response.status}`);

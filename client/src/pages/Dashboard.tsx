@@ -425,11 +425,19 @@ export default function Dashboard() {
             <div className="text-sm">
               <div className="font-medium mb-1">Recommended Next Steps</div>
               <ul className="list-decimal pl-5 space-y-1">
-                {(plan?.recommendedLessons || []).slice(0, 5).map((id) => (
-                  <li key={`rl-${id}`}>
-                    <Link href={`/lesson/${id}`}>Lesson {id}</Link>
-                  </li>
-                ))}
+                {(plan?.recommendedLessons || []).slice(0, 5).map((id) => {
+                  // Find lesson title from modules data
+                  const lesson = modules?.flatMap(m => m.lessons || []).find(l => l.id === id);
+                  return (
+                    <li key={`rl-${id}`}>
+                      <Link href={`/lesson/${id}`}>
+                        <span className="text-primary hover:underline cursor-pointer">
+                          {lesson?.title || `Lesson ${id}`}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
                 {(plan?.recommendedLessons || []).length === 0 && <li className="text-muted-foreground">No recommendations yet</li>}
               </ul>
             </div>

@@ -15,6 +15,7 @@ import { apiUrl, getAccessToken } from "@/lib/api";
 import { useModules } from "@/hooks/use-modules";
 import { Layout } from "@/components/Layout";
 import { cn } from "@/lib/utils";
+import QuizView from "@/components/QuizView";
 
 const ChatTutor = lazy(() => import("@/components/ChatTutor").then((mod) => ({ default: mod.ChatTutor })));
 
@@ -402,67 +403,44 @@ export default function LessonView() {
                   </div>
                   <Bot className="w-5 h-5 text-primary opacity-50" />
                 </div>
-                
-                <div className="space-y-8">
-                  {((lesson as any).quizzes?.[0]?.questions || []).map((q: any, qIdx: number) => {
-                    const result = quizResults[`${lesson.id}-${qIdx}`];
-                    return (
-                      <div key={`q-${qIdx}`} className="space-y-4">
-                        <div className="flex items-start gap-3">
-                          <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold mt-0.5">
-                            {qIdx + 1}
-                          </span>
-                          <h4 className="font-semibold text-base leading-snug">{q.text}</h4>
-                        </div>
-                        
-                        <div className="grid gap-3 pl-9">
-                          {(q.options || []).map((opt: any, oIdx: number) => {
-                            const isSelected = result?.selected === oIdx;
-                            const isCorrect = q.correct_option_idx !== undefined ? oIdx === q.correct_option_idx : oIdx === q.correct;
-                            const showSuccess = isSelected && isCorrect;
-                            const showError = isSelected && !isCorrect;
+                <QuizView
+                  questions={(lesson as any).quizzes?.[0]?.questions || []}
+                  onSubmit={async (answers) => {
+                    try {
+                      // Calculate score
+                      const questions = (lesson as any).quizzes?.[0]?.questions || [];
+                      const correctCount = questions.reduce((acc: number, q: any) => {
+                        const selectedIdx = answers[q.id];
+                        const isCorrect = q.options?.[selectedIdx]?.correct;
+                        return isCorrect ? acc + 1 : acc;
+                      }, 0);
+                      const score = (correctCount / questions.length) * 100;
 
-                            return (
-                              <button
-                                key={`q-${qIdx}-o-${oIdx}`}
-                                onClick={() => {
-                                  if (result) return; // Prevent multiple attempts for now
-                                  const correct = q.correct_option_idx !== undefined ? oIdx === q.correct_option_idx : oIdx === q.correct;
-                                  setQuizResults(prev => ({
-                                    ...prev,
-                                    [`${lesson.id}-${qIdx}`]: { selected: oIdx, correct }
-                                  }));
-                                }}
-                                disabled={!!result}
-                                className={cn(
-                                  "flex items-center justify-between p-4 border rounded-xl transition-all duration-200 text-left group",
-                                  !result && "hover:border-primary/50 hover:bg-primary/5",
-                                  showSuccess && "border-green-500 bg-green-500/10",
-                                  showError && "border-destructive bg-destructive/10",
-                                  result && !isSelected && "opacity-60 grayscale-[0.5]"
-                                )}
-                              >
-                                <span className="text-sm font-medium">{opt.text}</span>
-                                {showSuccess && (
-                                  <div className="flex items-center gap-2 text-green-600 font-bold text-xs uppercase tracking-wider">
-                                    <span>Correct</span>
-                                    <RotateCcw className="w-4 h-4 rotate-45" />
-                                  </div>
-                                )}
-                                {showError && (
-                                  <div className="flex items-center gap-2 text-destructive font-bold text-xs uppercase tracking-wider">
-                                    <span>Try Again</span>
-                                    <X className="w-4 h-4" />
-                                  </div>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      await progressMutation.mutateAsync({
+                        lessonId: lessonId,
+                        completed: true,
+                        score: score,
+                      });
+                      
+                      toast({
+                        title: "Knowledge Check Completed",
+                        description: `You scored ${Math.round(score)}%`,
+                      });
+                      
+                      confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 }
+                      });
+                    } catch (err: any) {
+                      toast({
+                        title: "Error",
+                        description: err.message || "Failed to save progress",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                />
               </div>
             )}
              

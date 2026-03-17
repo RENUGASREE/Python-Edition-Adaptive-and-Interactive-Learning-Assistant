@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiUrl, getAccessToken } from "@/lib/api";
 import { Link, useLocation, useParams } from "wouter";
 import { Loader2 } from "lucide-react";
+import QuizView from "@/components/QuizView";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -76,7 +77,6 @@ export default function ModuleQuiz() {
   const quiz = lesson?.quizzes?.find((q: any) => q.title === "Module Quiz");
   const questions = quiz?.questions || [];
 
-  const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(900);
@@ -105,18 +105,14 @@ export default function ModuleQuiz() {
 
   const moduleQuizCompleted = (quizAttempts || []).some((attempt: any) => attempt?.notes?.includes(`module:${moduleId}:level:`));
 
-  const handleSelect = (questionId: number, optionIndex: number) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (quizAnswers: Record<number, number>) => {
     setError(null);
     if (!quiz || questions.length === 0) {
       setError("No module quiz is available right now.");
       return;
     }
 
-    const unanswered = questions.some((q: any) => answers[q.id] === undefined);
+    const unanswered = questions.some((q: any) => quizAnswers[q.id] === undefined);
     if (unanswered) {
       setError("Answer all questions before submitting.");
       return;
@@ -125,7 +121,7 @@ export default function ModuleQuiz() {
     const totalPoints = questions.reduce((sum: number, q: any) => sum + (q.points || 10), 0);
     const earnedPoints = questions.reduce((sum: number, q: any) => {
       const options: QuizOption[] = Array.isArray(q.options) ? q.options : [];
-      const selectedIndex = answers[q.id];
+      const selectedIndex = quizAnswers[q.id];
       const selectedOption = options[selectedIndex];
       if (selectedOption?.correct) return sum + (q.points || 10);
       return sum;
@@ -215,28 +211,7 @@ export default function ModuleQuiz() {
             {questions.length === 0 ? (
               <div className="text-muted-foreground">No module quiz is available right now.</div>
             ) : (
-              <div className="space-y-6">
-                {questions.map((q: any, index: number) => (
-                  <div key={q.id} className="space-y-3">
-                    <div className="font-medium">
-                      {index + 1}. {q.text}
-                    </div>
-                    <div className="grid gap-2">
-                      {(Array.isArray(q.options) ? q.options : []).map((opt: QuizOption, optIndex: number) => (
-                        <label key={`${q.id}-${optIndex}`} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:border-primary/60">
-                          <input
-                            type="radio"
-                            name={`question-${q.id}`}
-                            checked={answers[q.id] === optIndex}
-                            onChange={() => handleSelect(q.id, optIndex)}
-                          />
-                          <span>{opt.text}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <QuizView questions={questions} onSubmit={handleSubmit} />
             )}
 
             {error && <div className="text-sm text-destructive">{error}</div>}
@@ -250,9 +225,6 @@ export default function ModuleQuiz() {
               <Link href="/curriculum">
                 <Button variant="outline">Back to curriculum</Button>
               </Link>
-              <Button onClick={handleSubmit} disabled={submitting || questions.length === 0}>
-                {submitting ? "Submitting..." : moduleQuizCompleted ? "Retake Quiz" : "Submit quiz"}
-              </Button>
             </div>
           </CardContent>
         </Card>

@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RegisterView, LoginView, UserProfileView, LogoutView, RunChallengeView, ProgressViewSet, QuizAttemptViewSet, BadgeViewSet, CertificateViewSet, RecommendationViewSet, ChatMessageViewSet, ModuleViewSet, LessonViewSet, UserProgressViewSet, QuizViewSet, QuestionViewSet, ChallengeViewSet, MasteryUpdateView, AdaptiveRecommendationView, SubmitQuizView
+from .views import RegisterView, LoginView, UserProfileView, LogoutView, RunChallengeView, ProgressViewSet, QuizAttemptViewSet, BadgeViewSet, CertificateViewSet, RecommendationViewSet, ChatMessageViewSet, ModuleViewSet, LessonViewSet, UserProgressViewSet, QuizViewSet, QuestionViewSet, ChallengeViewSet, MasteryUpdateView, AdaptiveRecommendationView, SubmitQuizView, AITutorView, CertificateDownloadView
 
 router = DefaultRouter()
 router.register(r'modules', ModuleViewSet)
@@ -27,5 +27,7 @@ urlpatterns = [
     path('recommendations/next/', AdaptiveRecommendationView.as_view(), name='recommendations_next'),
     path('challenges/<int:id>/run/', RunChallengeView.as_view(), name='run_challenge'),
     path('quizzes/<int:quiz_id>/submit/', SubmitQuizView.as_view(), name='submit_quiz'),
+    path('ai-tutor/', AITutorView.as_view(), name='ai_tutor'),
+    path('certificates/<int:module_id>/download/', CertificateDownloadView.as_view(), name='certificate_download'),
     path('', include(router.urls)),
 ]
