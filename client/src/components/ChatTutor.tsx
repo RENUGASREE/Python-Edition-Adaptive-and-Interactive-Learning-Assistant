@@ -16,7 +16,7 @@ export function ChatTutor({ lessonId, lessonTitle, lessonContent }: ChatTutorPro
 
   return (
     <>
-      {/* Trigger Button */}
+      {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
         className={cn(
@@ -29,10 +29,12 @@ export function ChatTutor({ lessonId, lessonTitle, lessonContent }: ChatTutorPro
       </button>
 
       {/* Chat Window */}
-      <div className={cn(
-        "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-3rem)] h-[500px] bg-card border border-border rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right",
-        isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"
-      )}>
+      <div
+        className={cn(
+          "fixed bottom-6 right-6 w-96 max-w-[calc(100vw-3rem)] h-[500px] bg-card border border-border rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right",
+          isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"
+        )}
+      >
         {/* Header */}
         <div className="p-4 bg-muted/50 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -41,10 +43,10 @@ export function ChatTutor({ lessonId, lessonTitle, lessonContent }: ChatTutorPro
             </div>
             <div>
               <h3 className="font-bold text-sm">AI Tutor</h3>
-              <p className="text-xs text-muted-foreground">Ask for help or hints</p>
+              <p className="text-xs text-muted-foreground">Ask anything about Python</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setIsOpen(false)}
             className="p-1 hover:bg-background rounded-full transition-colors"
           >
@@ -52,7 +54,7 @@ export function ChatTutor({ lessonId, lessonTitle, lessonContent }: ChatTutorPro
           </button>
         </div>
 
-        {/* Conversation */}
+        {/* Chat */}
         <ChatConversation
           conversationKey={conversationKey}
           lessonTitle={lessonTitle}
@@ -72,37 +74,47 @@ function ChatConversation({
   lessonTitle: string;
   lessonContent: string;
 }) {
-  const { messages, sendMessage, isLoading, setMessages } = useChat({ lessonTitle, lessonContent });
+  const { messages, sendMessage, isLoading, setMessages } = useChat({
+    lessonTitle,
+    lessonContent,
+  });
+
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Auto scroll
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, conversationKey]);
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
 
+  // Reset chat when lesson changes
   useEffect(() => {
     setMessages([]);
-  }, [conversationKey, setMessages]);
+  }, [conversationKey]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-    sendMessage(input);
+    const trimmed = input.trim();
+    if (!trimmed || isLoading) return;
+
+    sendMessage(trimmed);
     setInput("");
   };
 
   return (
     <>
+      {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground text-sm py-8 px-4">
-            <p>👋 Hi there! I'm your Python tutor.</p>
-            <p className="mt-2">Stuck on a problem? Need a hint? Just ask!</p>
+            <p>👋 Hi! I'm your AI Python Tutor.</p>
+            <p className="mt-2">Ask doubts, debug code, or get challenges!</p>
           </div>
         )}
-        
+
         {messages.map((msg, i) => (
           <div
             key={i}
@@ -111,54 +123,60 @@ function ChatConversation({
               msg.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
             )}
           >
-            <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-              msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-            )}>
-              {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-            </div>
-            <div className={cn(
-              "p-3 rounded-2xl text-sm leading-relaxed",
-              msg.role === "user" 
-                ? "bg-primary text-primary-foreground rounded-tr-sm" 
-                : "bg-muted rounded-tl-sm markdown-content"
-            )}>
-              <ReactMarkdown>{msg.content}</ReactMarkdown>
-              {msg.role === "assistant" && (msg.sourceTopic || msg.confidenceScore !== null) && (
-                <div className="mt-3 text-xs text-muted-foreground flex items-center gap-3">
-                  {msg.sourceTopic && <span>Source: {msg.sourceTopic}</span>}
-                  {msg.confidenceScore !== null && msg.confidenceScore !== undefined && (
-                    <span>Confidence: {Math.round((msg.confidenceScore || 0) * 100)}%</span>
-                  )}
-                </div>
+            <div
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                msg.role === "user"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
               )}
+            >
+              {msg.role === "user" ? (
+                <User className="w-4 h-4" />
+              ) : (
+                <Bot className="w-4 h-4" />
+              )}
+            </div>
+
+            <div
+              className={cn(
+                "p-3 rounded-2xl text-sm leading-relaxed",
+                msg.role === "user"
+                  ? "bg-primary text-primary-foreground rounded-tr-sm"
+                  : "bg-muted rounded-tl-sm markdown-content"
+              )}
+            >
+              <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>
           </div>
         ))}
+
+        {/* Loader */}
         {isLoading && (
           <div className="flex gap-3 mr-auto max-w-[85%]">
-            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
               <Bot className="w-4 h-4 text-muted-foreground" />
             </div>
-            <div className="bg-muted p-3 rounded-2xl rounded-tl-sm flex items-center">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <div className="bg-muted p-3 rounded-2xl flex items-center">
+              <Loader2 className="w-4 h-4 animate-spin" />
             </div>
           </div>
         )}
       </div>
 
+      {/* Input */}
       <form onSubmit={handleSubmit} className="p-3 border-t border-border bg-background">
         <div className="relative">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your question..."
-            className="w-full pl-4 pr-12 py-3 bg-muted/50 border border-transparent focus:border-primary rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
+            placeholder="Ask anything..."
+            className="w-full pl-4 pr-12 py-3 bg-muted/50 border border-transparent focus:border-primary rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary/20"
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="absolute right-2 top-2 p-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="absolute right-2 top-2 p-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
           >
             <Send className="w-4 h-4" />
           </button>

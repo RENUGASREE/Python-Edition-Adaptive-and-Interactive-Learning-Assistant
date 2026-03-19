@@ -29,8 +29,9 @@ import tempfile
 import json
 import re
 import logging
-import openai
 import os
+import urllib.request as urlreq
+import urllib.error as urlerr
 
 logger = logging.getLogger(__name__)
 
@@ -668,7 +669,7 @@ class UserProgressViewSet(viewsets.ModelViewSet):
         if completed and not completed_at:
             completed_at = timezone.now()
 
-        progress, _ = UserProgress.objects.update_or_create(
+        progress, created = UserProgress.objects.update_or_create(
             user_id=user_id,
             lesson_id=lesson_id,
             defaults={
@@ -698,12 +699,33 @@ class UserProgressViewSet(viewsets.ModelViewSet):
                 mark_recommendation_completed(user, lesson.id, mastery_before, mastery_after)
                 if topic:
                     update_shift_outcome(user, topic, mastery_before, mastery_after)
+                
+                # Logic to unlock the next lesson immediately
                 target_level = (lesson.difficulty or user.level or "Beginner").strip()
                 if target_level.lower() == "advanced":
                     target_level = "Pro"
-                lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id, difficulty=target_level)
-                if not lessons_in_module:
-                    lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id)
+                
+                # Get all lessons in this module for this difficulty
+                target_difficulty = target_level
+                lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id, difficulty__iexact=target_difficulty).order_by('order')
+                if not lessons_in_module.exists():
+                    # Fallback if no lessons match the specific difficulty
+                    lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id).order_by('order')
+                
+                lesson_list = list(lessons_in_module)
+                try:
+                    current_idx = next(i for i, l in enumerate(lesson_list) if l.id == lesson.id)
+                    if current_idx + 1 < len(lesson_list):
+                        next_lesson = lesson_list[current_idx + 1]
+                        # Pre-create progress for next lesson if it doesn't exist
+                        UserProgress.objects.get_or_create(
+                            user_id=user_id,
+                            lesson_id=next_lesson.id,
+                            defaults={"completed": False}
+                        )
+                except (StopIteration, Exception):
+                    pass
+
                 lesson_ids = list(lessons_in_module.values_list("id", flat=True))
                 if lesson_ids:
                     completed_count = UserProgress.objects.filter(
@@ -1160,30 +1182,97 @@ class CertificateDownloadView(APIView):
         return response
 
 class AITutorView(APIView):
-    permission_classes = (permissions.IsAuthenticated,)
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
-        query = request.data.get('query')
-        if not query:
+        message = request.data.get('message')
+        if message is None:
+            message = request.data.get('query', '')
+        message = str(message).strip()
+        if not message:
             return Response({'error': 'Query not provided'}, status=status.HTTP_400_BAD_REQUEST)
 
+        topic = (request.data.get('topic') or 'general').strip() or 'general'
+        history_payload = request.data.get('history') or []
+        history_msgs = []
+        if isinstance(history_payload, list):
+            for m in history_payload[-5:]:
+                try:
+                    role = str(m.get('role')).lower()
+                    content = str(m.get('content') or '').strip()
+                    if role in ('user', 'assistant') and content:
+                        history_msgs.append({'role': role, 'content': content})
+                except Exception:
+                    continue
+
+        # Build messages (use provided history; if empty, consider last from session)
+        session_key = f"aitutor_history:{topic}"
+        session_hist = request.session.get(session_key, [])
+        if not history_msgs and isinstance(session_hist, list):
+            # Map stored session messages into OpenAI roles
+            for m in session_hist[-5:]:
+                try:
+                    r = str(m.get('role')).lower()
+                    c = str(m.get('content') or '').strip()
+                    if r in ('user', 'assistant') and c:
+                        history_msgs.append({'role': r, 'content': c})
+                except Exception:
+                    continue
+
+        # Compose final payload
+        system_message = {"role": "system", "content": "You are an expert Python tutor. Explain clearly, give examples, debug code, and answer based on context."}
+        messages = [system_message] + history_msgs + [{"role": "user", "content": message}]
+
+        # Prepare OpenRouter request
+        api_key = os.environ.get("OPENAI_API_KEY")
+        base_url = os.environ.get("OPENAI_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+        model_id = os.environ.get("OPENAI_MODEL", "mistralai/mistral-7b-instruct")
+        endpoint = f"{base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "HTTP-Referer": "http://localhost:3000",
+            "X-Title": "AI Tutor Project",
+        }
+        payload = {
+            "model": model_id,
+            "messages": messages,
+        }
+
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "YOUR_API_KEY"))
+            if not api_key:
+                raise ValueError("Missing API key")
+            req = urlreq.Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+            timeout_seconds = int(os.environ.get("OPENAI_TIMEOUT_SECONDS", "20"))
+            with urlreq.urlopen(req, timeout=timeout_seconds) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            assistant_text = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            if not assistant_text:
+                return Response({"error": "AI service not available. Please try again later."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            session_key = f"aitutor_history:{topic}"
+            session_hist = request.session.get(session_key, [])
+            session_hist.append({'role': 'user', 'content': message})
+            session_hist.append({'role': 'assistant', 'content': assistant_text})
+            request.session[session_key] = session_hist[-10:]
+            request.session.modified = True
 
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful Python tutor."},
-                    {"role": "user", "content": query}
-                ]
-            )
+            return Response({
+                'response': assistant_text,
+                'source': 'OpenRouter'
+            })
 
-            response_data = {
-                'response': response.choices[0].message.content,
-                'source_topic': 'General',
-                'confidence_score': 0.99
-            }
-            return Response(response_data)
+        except urlerr.HTTPError as e:
+            try:
+                body = e.read().decode("utf-8")
+            except Exception:
+                body = ""
+            logger.error(f"OpenRouter HTTPError {e.code}: {body}")
+            return Response({"error": "AI service not available. Please try again later."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except (urlerr.URLError, ValueError, TimeoutError) as e:
+            logger.error(f"OpenRouter request error: {e}")
+            return Response({"error": "AI service not available. Please try again later."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"OpenRouter unexpected error: {e}")
+            return Response({"error": "AI service not available. Please try again later."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)

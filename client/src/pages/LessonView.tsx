@@ -183,7 +183,7 @@ export default function LessonView() {
     try {
       const result = await runMutation.mutateAsync({
         id: lesson.challenges[0].id,
-        code: code || ""
+        code: code.trim() || ""
       });
       
       setOutput(result.output || "");
@@ -417,9 +417,10 @@ export default function LessonView() {
                       const score = (correctCount / questions.length) * 100;
 
                       await progressMutation.mutateAsync({
-                        lessonId: lessonId,
+                        lessonId: parseInt(lessonId),
                         completed: true,
                         score: score,
+                        lastCode: JSON.stringify(answers)
                       });
                       
                       toast({

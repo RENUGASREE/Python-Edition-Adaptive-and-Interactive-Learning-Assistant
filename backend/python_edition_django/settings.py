@@ -19,7 +19,13 @@ import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Load environment variables from backend/.env (existing behavior)
 load_dotenv(BASE_DIR.parent / ".env")
+# Also attempt to load project-root .env for local development
+try:
+    load_dotenv(BASE_DIR.parent.parent / ".env")
+except Exception:
+    pass
 
 
 # Quick-start development settings - unsuitable for production

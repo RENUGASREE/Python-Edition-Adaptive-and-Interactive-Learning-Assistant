@@ -246,6 +246,8 @@ export default function PlacementQuiz() {
           description: `Score: ${Math.round((data?.weightedScore || data?.overallScore || 0) * 100)}%`,
         });
         setExpired(true);
+        // Ensure user data is refetched so firstLessonId can be calculated
+        await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
         setTimeout(() => setLocation("/dashboard"), 400);
       }
     } catch (err: any) {
