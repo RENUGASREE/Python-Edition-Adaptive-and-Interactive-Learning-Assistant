@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiUrl, getAccessToken } from "@/lib/api";
+import { apiUrl } from "@/lib/api";
+import { refreshAndRetry } from "@/lib/api-auth";
 import { useAuth } from "@/hooks/use-auth";
 import { type Module, type Lesson } from "@/types";
 
@@ -10,25 +11,12 @@ export function useModules(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["/api/modules"],
     queryFn: async () => {
-      const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/api/modules/"), {
-        credentials: "include",
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        let message = res.statusText;
-        try {
-          const json = JSON.parse(text);
-          if (json?.message) message = json.message;
-        } catch {
-          if (text) message = text;
-        }
-        const error = new Error(message) as Error & { status?: number };
-        error.status = res.status;
-        throw error;
-      }
-      return await res.json() as ModuleWithLessons[];
+      return refreshAndRetry<ModuleWithLessons[]>((token) =>
+        fetch(apiUrl("/api/modules/"), {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      );
     },
     enabled: (options?.enabled ?? true) && isAuthenticated,
   });
@@ -39,26 +27,12 @@ export function useModule(id: number) {
   return useQuery({
     queryKey: ["/api/modules", id],
     queryFn: async () => {
-      const url = `/api/modules/${id}/`;
-      const accessToken = getAccessToken();
-      const res = await fetch(apiUrl(url), {
-        credentials: "include",
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        let message = res.statusText;
-        try {
-          const json = JSON.parse(text);
-          if (json?.message) message = json.message;
-        } catch {
-          if (text) message = text;
-        }
-        const error = new Error(message) as Error & { status?: number };
-        error.status = res.status;
-        throw error;
-      }
-      return await res.json();
+      return refreshAndRetry<unknown>((token) =>
+        fetch(apiUrl(`/api/modules/${id}/`), {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      );
     },
     enabled: !!id && isAuthenticated,
   });

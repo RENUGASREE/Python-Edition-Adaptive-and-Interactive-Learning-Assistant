@@ -254,7 +254,14 @@ class LessonSerializer(serializers.ModelSerializer):
                     {
                         "id": -(obj.id * 100 + idx),
                         "text": q["question"],
-                        "options": [{"id": i, "text": opt} for i, opt in enumerate(q["options"])],
+                        "options": [
+                            {
+                                "id": i,
+                                "text": opt,
+                                "correct": i == q.get("correct", -1)
+                            }
+                            for i, opt in enumerate(q["options"])
+                        ],
                         "correct_option_idx": q["correct"],
                         "points": 10
                     } for idx, q in enumerate(dynamic_questions)
@@ -366,7 +373,7 @@ class ModuleSerializer(serializers.ModelSerializer):
         }
         
         unlocked = []
-        for lesson in lessons:
+        for idx, lesson in enumerate(lessons):
             is_unlocked = True
             prereqs = prereq_map.get(lesson.id, [])
             if prereqs:
@@ -374,7 +381,11 @@ class ModuleSerializer(serializers.ModelSerializer):
                     if pre_id not in completed_ids:
                         is_unlocked = False
                         break
-            
+
+            # Ensure sequential unlock: next lesson unlocked only when previous is completed
+            if idx > 0 and not completed_ids.__contains__(lessons[idx - 1].id):
+                is_unlocked = False
+
             # Use SimpleLessonSerializer if LessonSerializer causes circular issues
             # For now, ensuring LessonSerializer is available
             data = LessonSerializer(lesson, context=self.context).data
@@ -386,14 +397,18 @@ class ModuleSerializer(serializers.ModelSerializer):
 # --- End Content Serializers ---
 
 class UserProgressSerializer(serializers.ModelSerializer):
-    userId = serializers.CharField(source='user_id')
+    userId = serializers.CharField(source='user_id', read_only=False)
     lessonId = serializers.IntegerField(source='lesson_id')
-    lastCode = serializers.CharField(source='last_code', required=False)
-    completedAt = serializers.DateTimeField(source='completed_at', required=False)
+    lastCode = serializers.CharField(source='last_code', required=False, allow_blank=True)
+    completedAt = serializers.DateTimeField(source='completed_at', required=False, allow_null=True)
 
     class Meta:
         model = UserProgress
         fields = ('id', 'userId', 'lessonId', 'completed', 'score', 'lastCode', 'completedAt')
+    
+    def create(self, validated_data):
+        # Remove userId if present and use the one from the request
+        return super().create(validated_data)
 
 class ProgressSerializer(serializers.ModelSerializer):
     class Meta:

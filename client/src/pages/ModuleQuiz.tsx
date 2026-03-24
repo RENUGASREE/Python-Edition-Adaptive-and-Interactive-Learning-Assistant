@@ -74,8 +74,64 @@ export default function ModuleQuiz() {
 
   const lessonId = moduleLessons[0]?.id || 0;
   const { data: lesson, isLoading: loadingLesson } = useLesson(lessonId);
-  const quiz = lesson?.quizzes?.find((q: any) => q.title === "Module Quiz");
+  // Use the first lesson's quiz (questions are generated based on module topic)
+  const quiz = lesson?.quizzes?.[0];
   const questions = quiz?.questions || [];
+
+  const generatedQuiz = useMemo(() => {
+    if (questions.length > 0 || !lesson) {
+      return [];
+    }
+    const text = `${lesson.title}\n${lesson.content}`;
+    const lower = text.toLowerCase();
+    const generated: any[] = [];
+
+    if (lower.includes("loop") || lower.includes("for ") || lower.includes("while ")) {
+      generated.push({
+        id: -1,
+        text: "Which statement iterates over a sequence in Python?",
+        options: [
+          { id: 0, text: "for", correct: true },
+          { id: 1, text: "iterate", correct: false },
+          { id: 2, text: "repeat", correct: false },
+          { id: 3, text: "switch", correct: false },
+        ],
+        points: 10,
+      });
+    }
+
+    if (lower.includes("function") || lower.includes("def ") || lower.includes("return")) {
+      generated.push({
+        id: -2,
+        text: "Which keyword defines a function in Python?",
+        options: [
+          { id: 0, text: "func", correct: false },
+          { id: 1, text: "def", correct: true },
+          { id: 2, text: "function", correct: false },
+          { id: 3, text: "lambda", correct: false },
+        ],
+        points: 10,
+      });
+    }
+
+    if (!generated.length) {
+      generated.push({
+        id: -99,
+        text: "What does the Python len() function return?",
+        options: [
+          { id: 0, text: "Length of a sequence", correct: true },
+          { id: 1, text: "Type of a variable", correct: false },
+          { id: 2, text: "Memory address", correct: false },
+          { id: 3, text: "None", correct: false },
+        ],
+        points: 10,
+      });
+    }
+
+    return generated;
+  }, [questions, lesson]);
+
+  const effectiveQuestions = questions.length > 0 ? questions : generatedQuiz;
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,14 +168,14 @@ export default function ModuleQuiz() {
       return;
     }
 
-    const unanswered = questions.some((q: any) => quizAnswers[q.id] === undefined);
+    const unanswered = effectiveQuestions.some((q: any) => quizAnswers[q.id] === undefined);
     if (unanswered) {
       setError("Answer all questions before submitting.");
       return;
     }
 
-    const totalPoints = questions.reduce((sum: number, q: any) => sum + (q.points || 10), 0);
-    const earnedPoints = questions.reduce((sum: number, q: any) => {
+    const totalPoints = effectiveQuestions.reduce((sum: number, q: any) => sum + (q.points || 10), 0);
+    const earnedPoints = effectiveQuestions.reduce((sum: number, q: any) => {
       const options: QuizOption[] = Array.isArray(q.options) ? q.options : [];
       const selectedIndex = quizAnswers[q.id];
       const selectedOption = options[selectedIndex];
@@ -208,10 +264,10 @@ export default function ModuleQuiz() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {questions.length === 0 ? (
+            {effectiveQuestions.length === 0 ? (
               <div className="text-muted-foreground">No module quiz is available right now.</div>
             ) : (
-              <QuizView questions={questions} onSubmit={handleSubmit} />
+              <QuizView questions={effectiveQuestions} onSubmit={handleSubmit} />
             )}
 
             {error && <div className="text-sm text-destructive">{error}</div>}

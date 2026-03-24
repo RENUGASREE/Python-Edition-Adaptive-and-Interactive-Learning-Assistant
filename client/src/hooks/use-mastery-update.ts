@@ -1,23 +1,22 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiUrl, getAccessToken } from "@/lib/api";
-
+import { apiUrl } from "@/lib/api";
+import { refreshAndRetry } from "@/lib/api-auth";
 
 export function useMasteryUpdate() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ moduleId, score, source, topic }: { moduleId: number; score: number; source: string; topic?: string | null }) => {
-      const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/mastery/update"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({ moduleId, score, source, topic }),
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to update mastery");
-      return res.json();
+      return refreshAndRetry<unknown>((token) =>
+        fetch(apiUrl("/mastery/update"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ moduleId, score, source, topic }),
+          credentials: "include",
+        })
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });

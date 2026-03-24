@@ -415,12 +415,60 @@ class LogoutView(APIView):
 class RunChallengeView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
+    def strip_input_prompts(self, code, text):
+        import re
+        if not text:
+            return ""
+        # Collect explicit prompt strings used in input() calls
+        prompt_matches = re.findall(r"input\s*\(\s*(['\"])(.*?)\1\s*\)", code)
+        cleaned = text
+        for _, prompt in prompt_matches:
+            if prompt:
+                # Replace all prompt occurrences from output so match is based on logical result
+                cleaned = cleaned.replace(prompt, "")
+        return cleaned.strip()
+
+    def _is_numeric(self, text):
+        try:
+            float(text)
+            return True
+        except Exception:
+            return False
+
+    def _extract_numeric_tokens(self, text):
+        return re.findall(r"-?\d+\.?\d*", text)
+
+    def is_output_equivalent(self, expected, actual):
+        expected = (expected or "").strip()
+        actual = (actual or "").strip()
+        if expected == actual:
+            return True
+
+        # Exact word in actual (for player-friendly annotated output)
+        if expected and re.search(rf"\b{re.escape(expected)}\b", actual):
+            return True
+
+        # Numeric tolerance for cases like `sum: 15` vs `15`.
+        if self._is_numeric(expected) and self._is_numeric(actual):
+            try:
+                return float(expected) == float(actual)
+            except Exception:
+                pass
+
+        if self._is_numeric(expected):
+            actual_tokens = self._extract_numeric_tokens(actual)
+            if actual_tokens and actual_tokens[-1] == expected:
+                return True
+
+        return False
+
     def post(self, request, id):
         code = request.data.get('code', '')
+        input_text = request.data.get('input', '')
         if not code.strip():
             return Response({'message': 'Please write some code before running.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        def run_code(code_to_run):
+        def run_code(code_to_run, input_text=""):
             filename = f"temp_{uuid.uuid4()}.py"
             # Use a more reliable temp directory
             temp_dir = os.path.join(tempfile.gettempdir(), 'great_design_tmp')
@@ -432,14 +480,29 @@ class RunChallengeView(APIView):
                 # Quote the executable on Windows if it contains spaces
                 executable = sys.executable
                 
-                result = subprocess.run(
-                    [executable, filepath],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                    cwd=temp_dir,
-                    encoding='utf-8'
-                )
+                # Handle input if provided
+                if input_text:
+                    # Ensure input has trailing newline for Python's input() function
+                    if not input_text.endswith('\n'):
+                        input_text += '\n'
+                    result = subprocess.run(
+                        [executable, filepath],
+                        input=input_text,
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                        cwd=temp_dir,
+                        encoding='utf-8'
+                    )
+                else:
+                    result = subprocess.run(
+                        [executable, filepath],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                        cwd=temp_dir,
+                        encoding='utf-8'
+                    )
                 if "ModuleNotFoundError" in result.stderr:
                     module_name = result.stderr.split("'")[1]
                     return result.stdout, f"Error: Module '{module_name}' not found. Please import a valid module."
@@ -466,9 +529,11 @@ class RunChallengeView(APIView):
             temp_dir = os.path.join(tempfile.gettempdir(), 'great_design_tmp')
             os.makedirs(temp_dir, exist_ok=True)
 
-            if test_cases:
+            if test_cases and not input_text:
                 for tc in test_cases:
                     tc_input = str(tc.get("input") or "")
+                    if tc_input and not tc_input.endswith('\n'):
+                        tc_input += '\n'
                     filename = f"temp_{uuid.uuid4()}.py"
                     filepath = os.path.join(temp_dir, filename)
                     try:
@@ -486,14 +551,17 @@ class RunChallengeView(APIView):
                         )
                         out = result.stdout.strip()
                         err = result.stderr.strip()
-                        combined_output += out + ("\n" if out else "")
+
+                        cleaned_out = self.strip_input_prompts(code, out)
+                        combined_output += cleaned_out + ("\n" if cleaned_out else "")
+
                         expected = str(tc.get("expected", "")).strip()
-                        if err or out != expected:
+                        if err or not self.is_output_equivalent(expected, cleaned_out):
                             all_passed = False
                             if err:
                                 error_message = err
                             else:
-                                error_message = f"Expected '{expected}', got '{out}'"
+                                error_message = f"Expected '{expected}', got '{cleaned_out}'"
                             break
                     except subprocess.TimeoutExpired:
                         all_passed = False
@@ -507,20 +575,22 @@ class RunChallengeView(APIView):
                                 pass
             else:
                 # Fallback to single run and optional comparison with reference solution
-                stdout, stderr = run_code(code)
-                combined_output = stdout
+                stdout, stderr = run_code(code, input_text)
+                cleaned_stdout = self.strip_input_prompts(code, stdout.strip())
+                combined_output = cleaned_stdout
                 if stderr:
                     all_passed = False
                     error_message = stderr
                 elif challenge.solution_code:
-                    expected_stdout, expected_stderr = run_code(challenge.solution_code)
+                    expected_stdout, expected_stderr = run_code(challenge.solution_code, input_text)
+                    cleaned_expected = self.strip_input_prompts(challenge.solution_code, expected_stdout.strip())
                     if expected_stderr:
                         all_passed = False
                         error_message = "Reference solution failed to run"
                     else:
-                        all_passed = stdout.strip() == expected_stdout.strip()
+                        all_passed = self.is_output_equivalent(cleaned_expected, cleaned_stdout)
                         if not all_passed:
-                            error_message = "Output does not match the expected result"
+                            error_message = f"Expected '{cleaned_expected}', got '{cleaned_stdout}'"
 
             if challenge and challenge.lesson_id:
                 lesson = Lesson.objects.filter(id=challenge.lesson_id).first()
@@ -653,12 +723,17 @@ class UserProgressViewSet(viewsets.ModelViewSet):
         return self.queryset.filter(user_id=str(user.id))
 
     def create(self, request, *args, **kwargs):
-        if not _quiz_completed(request.user):
-            return Response({"message": "You need to complete the placement quiz to personalize your learning path."}, status=status.HTTP_403_FORBIDDEN)
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        # Removed placement quiz check to allow progress updates
+        # Auto-populate userId from authenticated user
         user = request.user
         user_id = user.original_uuid or str(user.id)
+        
+        # Prepare data with userId populated (serializer expects camelCase field name)
+        data = request.data.copy()
+        data['userId'] = user_id
+        
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
         lesson_id = serializer.validated_data.get("lesson_id")
         completed = serializer.validated_data.get("completed")
         score = serializer.validated_data.get("score")
@@ -1043,7 +1118,7 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         if topic is not None and correct is not None:
             log_assessment_interaction(request.user, topic, bool(correct), float(time_spent or 0), int(hints_used or 0), "quiz")
         analyze_user_skill_gaps(request.user)
-        output = self.get_serializer(progress).data
+        output = serializer.data
         return Response(output, status=status.HTTP_200_OK)
 
 
@@ -1144,9 +1219,13 @@ class CertificateDownloadView(APIView):
 
     def get(self, request, module_id):
         user = request.user
-        try:
-            certificate = Certificate.objects.get(user=user, module_id=module_id)
-        except Certificate.DoesNotExist:
+        module = Module.objects.filter(id=module_id).first()
+        if module:
+            certificate = Certificate.objects.filter(user=user, module=module.title).first()
+        else:
+            certificate = None
+
+        if not certificate:
             return Response({"message": "Certificate not found"}, status=status.HTTP_404_NOT_FOUND)
 
         response = HttpResponse(content_type='application/pdf')

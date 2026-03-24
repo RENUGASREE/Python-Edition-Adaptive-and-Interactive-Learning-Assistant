@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Play, ChevronRight, AlertCircle, RotateCcw, Code2, Bot, Sparkles, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Editor } from "@/components/Editor";
+import { TerminalConsole, InteractiveConsole } from "@/components/TerminalConsole";
 import { useMastery } from "@/hooks/use-mastery";
 import { useMasteryUpdate } from "@/hooks/use-mastery-update";
 import { useState, useEffect, useMemo, Suspense, lazy } from "react";
@@ -16,6 +17,7 @@ import { useModules } from "@/hooks/use-modules";
 import { Layout } from "@/components/Layout";
 import { cn } from "@/lib/utils";
 import QuizView from "@/components/QuizView";
+import { parseInputCalls, getInputCount, formatInteractiveOutput, stripInputPromptsFromOutput } from "@/lib/interactive-console";
 
 const ChatTutor = lazy(() => import("@/components/ChatTutor").then((mod) => ({ default: mod.ChatTutor })));
 
@@ -49,6 +51,15 @@ export default function LessonView() {
   const [output, setOutput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [masteryImpact, setMasteryImpact] = useState<number | null>(null);
+  
+  // Interactive console state
+  const [isInteractiveMode, setIsInteractiveMode] = useState(false);
+  const [isWaitingForInput, setIsWaitingForInput] = useState(false);
+  const [collectedInputs, setCollectedInputs] = useState<string[]>([]);
+  const [inputCalls, setInputCalls] = useState<any[]>([]);
+  const [currentInputIndex, setCurrentInputIndex] = useState(0);
+  const [interactiveOutput, setInteractiveOutput] = useState("");
+  const [totalInputsNeeded, setTotalInputsNeeded] = useState(0)
   const masteryKey = (lesson as any)?.topic || lesson?.title;
   const masteryScore = masteryKey ? (masteryVector?.[masteryKey] ?? 0) : 0;
   const encouragement =
@@ -165,10 +176,10 @@ export default function LessonView() {
     };
   }, [lesson]);
 
-  // Initialize code when lesson loads - empty by default to encourage active learning
+  // Initialize code when lesson loads to challenge starter code or empty as fallback
   useEffect(() => {
     if (lesson?.challenges?.[0]) {
-      setCode("");
+      setCode(lesson.challenges[0].initial_code || "");
     }
   }, [lesson]);
 
@@ -177,24 +188,126 @@ export default function LessonView() {
   const handleRun = async () => {
     if (!lesson?.challenges?.[0]) return;
     
+    // Check if code is empty or just whitespace
+    if (!code.trim()) {
+      setError("Please write some code before running.");
+      return;
+    }
+    
+    // Check for input() calls
+    const inputCount = getInputCount(code);
+    
+    if (inputCount > 0) {
+      // Interactive mode: collect inputs one by one
+      const calls = parseInputCalls(code);
+      setInputCalls(calls);
+      setTotalInputsNeeded(inputCount);
+      setCollectedInputs([]);
+      setCurrentInputIndex(0);
+      setInteractiveOutput("");
+      setError(null);
+      setOutput("");
+      setIsInteractiveMode(true);
+      setIsWaitingForInput(true);
+    } else {
+      // Non-interactive: just run the code
+      setIsInteractiveMode(false);
+      setOutput("Running...");
+      setError(null);
+      
+      try {
+        const result = await runMutation.mutateAsync({
+          id: lesson.challenges[0].id,
+          code: code.trim(),
+          input: ""
+        });
+        
+        setOutput(result.output || "");
+        
+        if (result.error) {
+          setError(result.error);
+        } else if (result.passed) {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+          toast({
+            title: "Challenge Passed!",
+            description: "Great job! Your solution is correct.",
+            className: "bg-green-500 text-white border-none",
+          });
+          setMasteryImpact(0.06);
+          
+          if (user) {
+            progressMutation.mutate({
+              userId: String(user.id),
+              lessonId,
+              completed: true,
+              lastCode: code,
+              score: 100,
+              completedAt: new Date().toISOString()
+            });
+          }
+        } else {
+          setError(result.error || "Code ran but didn't pass all test cases. Check your output above.");
+        }
+      } catch (err: any) {
+        console.error("Run challenge error:", err);
+        setError(err.message || "Failed to execute code");
+        setOutput("");
+      }
+    }
+  };
+
+  const handleInteractiveInput = async (value: string) => {
+    const newInputs = [...collectedInputs, value];
+    setCollectedInputs(newInputs);
+
+    const inputCall = inputCalls[currentInputIndex];
+    const prompt = inputCall?.prompt || "Input";
+    const displayOutput = interactiveOutput + prompt + "\n" + value + "\n";
+    setInteractiveOutput(displayOutput);
+
+    if (newInputs.length < totalInputsNeeded) {
+      setCurrentInputIndex(newInputs.length);
+      setIsWaitingForInput(true);
+      return;
+    }
+
+    setIsWaitingForInput(false);
     setOutput("Running...");
     setError(null);
-    
+
     try {
       const result = await runMutation.mutateAsync({
         id: lesson.challenges[0].id,
-        code: code.trim() || ""
+        code: code.trim(),
+        input: newInputs.join("\n"),
       });
-      
-      setOutput(result.output || "");
-      
+
+      // Remove repeated prompt echoes from backend stdout
+      const cleanedRuntimeOutput = stripInputPromptsFromOutput(
+        result.output || "",
+        inputCalls.map((c) => c.prompt || "")
+      );
+
+      const finalOutput = formatInteractiveOutput(
+        inputCalls.map((c) => c.prompt || ""),
+        newInputs,
+        cleanedRuntimeOutput
+      );
+
+      setInteractiveOutput(finalOutput);
+      setOutput(finalOutput);
+
       if (result.error) {
         setError(result.error);
       } else if (result.passed) {
         confetti({
           particleCount: 100,
           spread: 70,
-          origin: { y: 0.6 }
+          origin: { y: 0.6 },
         });
         toast({
           title: "Challenge Passed!",
@@ -202,25 +315,28 @@ export default function LessonView() {
           className: "bg-green-500 text-white border-none",
         });
         setMasteryImpact(0.06);
-        
-        // Mark lesson as complete
+
         if (user) {
           progressMutation.mutate({
-            userId: user.id,
+            userId: String(user.id),
             lessonId,
             completed: true,
             lastCode: code,
             score: 100,
-            completedAt: new Date()
+            completedAt: new Date().toISOString(),
           });
         }
+
+        setOutput((prev) => (prev ? prev + "\n\n" : "") + "✅ All tests passed!");
       } else {
-        setError("Code ran but didn't pass all test cases.");
+        setError(result.error || "Code ran but didn't pass all test cases. Check your output above.");
       }
     } catch (err: any) {
       console.error("Run challenge error:", err);
       setError(err.message || "Failed to execute code");
       setOutput("");
+    } finally {
+      setIsInteractiveMode(false);
     }
   };
 
@@ -350,9 +466,8 @@ export default function LessonView() {
              {nextLessonId && (
                <Link href={`/lesson/${nextLessonId}`}>
                  <button 
-                   disabled={!isLessonCompleted(lessonId)}
-                   className="p-2 hover:bg-muted rounded-lg transition-colors border border-border flex items-center gap-1 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" 
-                   title={isLessonCompleted(lessonId) ? "Next Lesson" : "Complete challenge to unlock next lesson"}
+                   className="p-2 hover:bg-muted rounded-lg transition-colors border border-border flex items-center gap-1 text-sm font-medium" 
+                   title="Next Lesson"
                  >
                    <span>Next</span>
                    <ChevronRight className="w-4 h-4" />
@@ -378,17 +493,10 @@ export default function LessonView() {
                   <div className="text-sm text-muted-foreground">Mastery for this topic</div>
                   <div className="text-xl font-semibold">{Math.round(masteryScore * 100)}%</div>
                 </div>
-                <button
-                  onClick={() => masteryUpdate.mutate({ moduleId: (lesson as any).moduleId, score: 0.9, source: "understood", topic: masteryKey })}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
-                >
-                  Mark as Understood
-                </button>
               </div>
               <div className="text-sm text-muted-foreground mt-3">{encouragement}</div>
               <div className="text-xs text-muted-foreground mt-2">
-                Updated mastery estimate: {Math.round(masteryScore * 100)}%
-                {masteryImpact ? ` · Impact +${Math.round(masteryImpact * 100)}%` : ""}
+                Complete the quiz or challenge below to mark this lesson as done.
               </div>
             </div>
              
@@ -417,7 +525,7 @@ export default function LessonView() {
                       const score = (correctCount / questions.length) * 100;
 
                       await progressMutation.mutateAsync({
-                        lessonId: parseInt(lessonId),
+                        lessonId: lessonId,
                         completed: true,
                         score: score,
                         lastCode: JSON.stringify(answers)
@@ -471,7 +579,7 @@ export default function LessonView() {
              
              <div className="flex items-center gap-2">
                <button 
-                 onClick={() => setCode(lesson.challenges?.[0]?.initialCode || "")}
+                 onClick={() => setCode(lesson.challenges?.[0]?.initial_code || "")}
                  className="p-1.5 text-muted-foreground hover:text-white hover:bg-[#37373d] rounded transition-colors"
                  title="Reset Code"
                >
@@ -489,30 +597,30 @@ export default function LessonView() {
           </div>
 
           {/* Editor Area */}
-          <div className="flex-1 overflow-hidden relative">
-            <Editor 
-              code={code} 
-              onChange={setCode}
-            />
+          <div className="flex-1 overflow-hidden relative flex flex-col">
+            <div className="flex-1 overflow-hidden relative">
+              <Editor 
+                code={code} 
+                onChange={setCode}
+              />
+            </div>
           </div>
 
           {/* Console / Output */}
           <div className="h-1/3 border-t border-[#333] bg-[#0f0f0f] flex flex-col shrink-0">
-            <div className="h-8 bg-[#1e1e1e] border-b border-[#333] px-4 flex items-center text-xs font-mono text-muted-foreground uppercase tracking-wider">
-              Console Output
-            </div>
-            <div className="flex-1 p-4 font-mono text-sm overflow-auto">
-              {error ? (
-                 <div className="text-red-400 whitespace-pre-wrap flex gap-2">
-                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                   {error}
-                 </div>
-              ) : output ? (
-                 <div className="text-green-400 whitespace-pre-wrap">{output}</div>
-              ) : (
-                 <div className="text-gray-600 italic">Run your code to see output...</div>
-              )}
-            </div>
+            {isInteractiveMode ? (
+              <InteractiveConsole 
+                isWaitingForInput={isWaitingForInput}
+                onInputSubmit={handleInteractiveInput}
+                output={interactiveOutput}
+                error={error || undefined}
+                isRunning={runMutation.isPending}
+                prompts={inputCalls.map((c) => c.prompt || "")}
+                currentPromptIndex={currentInputIndex}
+              />
+            ) : (
+              <TerminalConsole output={output} error={error || undefined} isRunning={runMutation.isPending} />
+            )}
           </div>
         </div>
       </div>

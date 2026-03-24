@@ -12,8 +12,8 @@ interface EditorProps {
 
 export function Editor({ code, onChange, disabled }: EditorProps) {
   return (
-    <div className="relative font-mono text-sm bg-[#1e1e1e] rounded-xl overflow-hidden border border-border shadow-inner min-h-[300px]">
-      <div className="absolute top-0 left-0 right-0 bg-[#252526] px-4 py-2 text-xs text-muted-foreground border-b border-border flex items-center justify-between">
+    <div className="relative font-mono text-sm bg-[#1e1e1e] rounded-xl overflow-hidden border border-border shadow-inner h-full">
+      <div className="absolute top-0 left-0 right-0 bg-[#252526] px-4 py-2 text-xs text-muted-foreground border-b border-border flex items-center justify-between z-10">
         <span>main.py</span>
         <span className="text-[10px] uppercase tracking-wider opacity-60">Python 3.10</span>
       </div>
@@ -24,14 +24,16 @@ export function Editor({ code, onChange, disabled }: EditorProps) {
           highlight={code => highlight(code, languages.python, 'python')}
           padding={16}
           disabled={disabled}
-          className="font-code min-h-[300px]"
+          className="font-code"
           style={{
             fontFamily: '"JetBrains Mono", monospace',
             fontSize: 14,
             backgroundColor: 'transparent',
-            color: '#d4d4d4'
+            color: '#d4d4d4',
+            minHeight: '100%',
+            outline: 'none',
           }}
-          textareaClassName="focus:outline-none"
+          textareaClassName="focus:outline-none focus:ring-0"
         />
       </div>
     </div>

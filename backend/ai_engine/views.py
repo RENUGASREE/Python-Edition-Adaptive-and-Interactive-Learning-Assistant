@@ -6,14 +6,14 @@ from .services import answer_with_rag
 
 
 class AiTutorView(APIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = ()
     throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "ai"
 
     def post(self, request):
-        query = request.data.get("query")
+        message = request.data.get("message")
         topic = request.data.get("topic")
-        if not query:
-            return Response({"message": "query is required"}, status=400)
-        result = answer_with_rag(query, topic=topic)
+        if not message:
+            return Response({"message": "message is required"}, status=400)
+        result = answer_with_rag(message, topic=topic)
         return Response(result)

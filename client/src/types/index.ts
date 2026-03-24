@@ -8,6 +8,7 @@ export interface User {
   diagnostic_completed: boolean;
   mastery_vector: Record<string, number>;
   engagement_score: number;
+  level?: string;
 }
 
 export interface Module {

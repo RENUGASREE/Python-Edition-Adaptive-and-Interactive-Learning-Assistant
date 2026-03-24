@@ -105,23 +105,253 @@ def _lesson_markdown(spec: LessonSpec) -> str:
 
 def _question_bank(spec: LessonSpec) -> list[dict]:
     # 2 questions per lesson -> 120 total for 60 lessons.
+    # Topic-specific questions for better learning experience
+    topic_questions = {
+        "input_output": [
+            {
+                "text": "Which function is used to display output in Python?",
+                "options": [
+                    {"text": "print()", "correct": True},
+                    {"text": "display()", "correct": False},
+                    {"text": "show()", "correct": False},
+                    {"text": "output()", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What does input() function return?",
+                "options": [
+                    {"text": "A string containing user input", "correct": True},
+                    {"text": "An integer", "correct": False},
+                    {"text": "A boolean value", "correct": False},
+                    {"text": "Nothing, it only displays text", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "variables": [
+            {
+                "text": "How do you create a variable named 'score' with value 100 in Python?",
+                "options": [
+                    {"text": "score = 100", "correct": True},
+                    {"text": "var score = 100", "correct": False},
+                    {"text": "int score = 100", "correct": False},
+                    {"text": "let score = 100", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What is the correct naming convention for Python variables?",
+                "options": [
+                    {"text": "snake_case (e.g., user_name)", "correct": True},
+                    {"text": "camelCase (e.g., userName)", "correct": False},
+                    {"text": "PascalCase (e.g., UserName)", "correct": False},
+                    {"text": "UPPER_CASE (e.g., USER_NAME)", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "types": [
+            {
+                "text": "Which function returns the data type of a variable?",
+                "options": [
+                    {"text": "type()", "correct": True},
+                    {"text": "typeof()", "correct": False},
+                    {"text": "dtype()", "correct": False},
+                    {"text": "gettype()", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What is the data type of: x = 3.14?",
+                "options": [
+                    {"text": "float", "correct": True},
+                    {"text": "int", "correct": False},
+                    {"text": "double", "correct": False},
+                    {"text": "decimal", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "if_else": [
+            {
+                "text": "What keyword is used to start a conditional statement in Python?",
+                "options": [
+                    {"text": "if", "correct": True},
+                    {"text": "when", "correct": False},
+                    {"text": "condition", "correct": False},
+                    {"text": "check", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What does 'else' do in an if-else statement?",
+                "options": [
+                    {"text": "Executes code when the if condition is False", "correct": True},
+                    {"text": "Executes code when the if condition is True", "correct": False},
+                    {"text": "Stops the program", "correct": False},
+                    {"text": "Creates a loop", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "loops_for": [
+            {
+                "text": "What does a for loop do in Python?",
+                "options": [
+                    {"text": "Iterates over a sequence (list, string, range, etc.)", "correct": True},
+                    {"text": "Creates a function", "correct": False},
+                    {"text": "Defines a class", "correct": False},
+                    {"text": "Imports a module", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What will 'for i in range(3):' iterate through?",
+                "options": [
+                    {"text": "0, 1, 2", "correct": True},
+                    {"text": "1, 2, 3", "correct": False},
+                    {"text": "0, 1, 2, 3", "correct": False},
+                    {"text": "1, 2", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "loops_while": [
+            {
+                "text": "When does a while loop stop executing?",
+                "options": [
+                    {"text": "When its condition becomes False", "correct": True},
+                    {"text": "After running exactly 10 times", "correct": False},
+                    {"text": "When it reaches a break statement only", "correct": False},
+                    {"text": "Never, it runs forever", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What is a common mistake with while loops?",
+                "options": [
+                    {"text": "Forgetting to update the condition (infinite loop)", "correct": True},
+                    {"text": "Using too many variables", "correct": False},
+                    {"text": "Not using print statements", "correct": False},
+                    {"text": "Starting with 0", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "functions_def": [
+            {
+                "text": "How do you define a function in Python?",
+                "options": [
+                    {"text": "def function_name():", "correct": True},
+                    {"text": "function function_name():", "correct": False},
+                    {"text": "func function_name():", "correct": False},
+                    {"text": "create function_name():", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What keyword is used to return a value from a function?",
+                "options": [
+                    {"text": "return", "correct": True},
+                    {"text": "output", "correct": False},
+                    {"text": "give", "correct": False},
+                    {"text": "send", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "lists": [
+            {
+                "text": "How do you create an empty list in Python?",
+                "options": [
+                    {"text": "[] or list()", "correct": True},
+                    {"text": "{}", "correct": False},
+                    {"text": "()", "correct": False},
+                    {"text": "new list()", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What method adds an element to the end of a list?",
+                "options": [
+                    {"text": "append()", "correct": True},
+                    {"text": "add()", "correct": False},
+                    {"text": "push()", "correct": False},
+                    {"text": "insert()", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "dicts": [
+            {
+                "text": "What is a dictionary in Python?",
+                "options": [
+                    {"text": "A collection of key-value pairs", "correct": True},
+                    {"text": "A list of numbers", "correct": False},
+                    {"text": "A type of function", "correct": False},
+                    {"text": "A string manipulation tool", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "How do you access the value for key 'name' in dictionary 'd'?",
+                "options": [
+                    {"text": "d['name'] or d.get('name')", "correct": True},
+                    {"text": "d.name", "correct": False},
+                    {"text": "d->name", "correct": False},
+                    {"text": "d(name)", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+        "classes": [
+            {
+                "text": "What keyword is used to define a class in Python?",
+                "options": [
+                    {"text": "class", "correct": True},
+                    {"text": "struct", "correct": False},
+                    {"text": "object", "correct": False},
+                    {"text": "type", "correct": False},
+                ],
+                "points": 2,
+            },
+            {
+                "text": "What is the purpose of __init__ method in a class?",
+                "options": [
+                    {"text": "Initialize object attributes when creating an instance", "correct": True},
+                    {"text": "Delete the object", "correct": False},
+                    {"text": "Print the object", "correct": False},
+                    {"text": "Compare two objects", "correct": False},
+                ],
+                "points": 2,
+            },
+        ],
+    }
+    
+    # Get topic-specific questions or fall back to generic ones
+    questions = topic_questions.get(spec.topic)
+    if questions:
+        return questions
+    
+    # Generic questions for topics not specifically covered
     q1 = {
-        "text": f"[{spec.topic}] What is the main purpose of {spec.title.lower()}?",
+        "text": f"What is the main purpose of {spec.title.lower()} in Python?",
         "options": [
-            {"text": "To solve a problem by applying a Python concept", "correct": True},
-            {"text": "To configure a database server", "correct": False},
-            {"text": "To install packages in Node.js", "correct": False},
-            {"text": "To compile Python into C", "correct": False},
+            {"text": "To solve problems and build programs", "correct": True},
+            {"text": "To slow down the computer", "correct": False},
+            {"text": "To create errors", "correct": False},
+            {"text": "To make code unreadable", "correct": False},
         ],
         "points": 2,
     }
     q2 = {
-        "text": f"[{spec.topic}] Which option is a best practice related to this lesson?",
+        "text": f"Which is a best practice when learning {spec.title.lower()}?",
         "options": [
-            {"text": "Keep code readable and test with small inputs", "correct": True},
-            {"text": "Avoid using variables and functions", "correct": False},
-            {"text": "Always use global state for simplicity", "correct": False},
-            {"text": "Write everything in one long file", "correct": False},
+            {"text": "Practice with small examples and test your code", "correct": True},
+            {"text": "Skip the fundamentals", "correct": False},
+            {"text": "Copy code without understanding it", "correct": False},
+            {"text": "Avoid asking questions", "correct": False},
         ],
         "points": 2,
     }

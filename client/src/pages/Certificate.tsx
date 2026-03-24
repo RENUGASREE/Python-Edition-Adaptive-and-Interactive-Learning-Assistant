@@ -104,7 +104,7 @@ export default function Certificate() {
           <Button onClick={async () => {
             try {
               const accessToken = getAccessToken();
-              const response = await fetch(apiUrl(`/certificates/${moduleId}/download/`), {
+              const response = await fetch(apiUrl(`/api/certificates/${moduleId}/download/`), {
                 headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
               });
               if (!response.ok) throw new Error("Failed to download certificate");

@@ -4,6 +4,9 @@ import { apiUrl, getAccessToken } from "@/lib/api";
 import { useState } from "react";
 import { useRunChallenge } from "@/hooks/use-lessons";
 import { Loader2 } from "lucide-react";
+import { formatConsoleOutput, getConsoleHelpText } from "@/lib/console-formatter";
+import { InteractiveConsole } from "@/components/TerminalConsole";
+import { parseInputCalls, getInputCount, formatInteractiveOutput, stripInputPromptsFromOutput } from "@/lib/interactive-console";
 
 type Challenge = {
   id: number;
@@ -35,18 +38,35 @@ export default function Challenges() {
   const [error, setError] = useState<string | null>(null);
   const [showSolution, setShowSolution] = useState(false);
 
-  const groups: Record<string, Challenge[]> = { Easy: [], Medium: [], Hard: [], Other: [] };
+  // Interactive mode state
+  const [isInteractiveMode, setIsInteractiveMode] = useState(false);
+  const [isWaitingForInput, setIsWaitingForInput] = useState(false);
+  const [collectedInputs, setCollectedInputs] = useState<string[]>([]);
+  const [interactiveOutput, setInteractiveOutput] = useState("");
+  const [totalInputsNeeded, setTotalInputsNeeded] = useState(0);
+  const [inputCalls, setInputCalls] = useState<any[]>([]);
+  const [currentInputIndex, setCurrentInputIndex] = useState(0);
+
+  const groups: Record<string, Challenge[]> = { Easy: [], Medium: [], Hard: [] };
   (data || []).forEach((c) => {
+    // Only include standalone challenges (lesson_id is -1 or not associated with a lesson)
+    // This ensures we have exactly 10 per category
     const d = (c.difficulty || "").toLowerCase();
     if (d.includes("beginner") || d.includes("easy")) groups.Easy.push(c);
     else if (d.includes("intermediate") || d.includes("medium")) groups.Medium.push(c);
     else if (d.includes("advanced") || d.includes("hard") || d.includes("pro")) groups.Hard.push(c);
-    else groups.Other.push(c);
+    // Default to Easy if no difficulty specified
+    else groups.Easy.push(c);
+  });
+  
+  // Limit to 10 per category
+  Object.keys(groups).forEach(key => {
+    groups[key] = groups[key].slice(0, 10);
   });
 
   const handleSelect = (c: Challenge) => {
     setSelected(c);
-    setCode(""); // Empty by default to encourage active learning
+    setCode(c.initial_code || "");
     setOutput("");
     setError(null);
     setShowSolution(false);
@@ -54,17 +74,100 @@ export default function Challenges() {
 
   const handleRun = async () => {
     if (!selected) return;
-    try {
-      setOutput("Running...");
+    
+    // Check for input() calls
+    const inputCount = getInputCount(code);
+    
+    if (inputCount > 0) {
+      // Interactive mode
+      const calls = parseInputCalls(code);
+      setInputCalls(calls);
+      setTotalInputsNeeded(inputCount);
+      setCollectedInputs([]);
+      setCurrentInputIndex(0);
+      setInteractiveOutput("");
       setError(null);
-      const result = await run.mutateAsync({ id: selected.id, code });
-      setOutput(result.output || "");
-      if (result.error) setError(result.error);
-      else if (result.passed) {
-        setOutput((prev) => prev + "\n\n✅ All tests passed!");
+      setOutput("");
+      setIsInteractiveMode(true);
+      setIsWaitingForInput(true);
+    } else {
+      // Non-interactive mode
+      setIsInteractiveMode(false);
+      try {
+        setOutput("Running...");
+        setError(null);
+        const result = await run.mutateAsync({ id: selected.id, code, input: "" });
+        // Show the actual output from code execution
+        if (result.output) {
+          setOutput(result.output);
+        } else {
+          setOutput("");
+        }
+        if (result.error) {
+          setError(result.error);
+        } else if (result.passed) {
+          setOutput((prev) => (prev ? prev + "\n\n" : "") + "✅ Challenge completed successfully!");
+        }
+      } catch (e: any) {
+        setError(e?.message || "Failed to run");
+        setOutput("");
       }
-    } catch (e: any) {
-      setError(e?.message || "Failed to run");
+    }
+  };
+
+  const handleInteractiveInput = async (value: string) => {
+    if (!selected) return;
+    
+    const newInputs = [...collectedInputs, value];
+    setCollectedInputs(newInputs);
+    
+    // Add to display output
+    const inputCall = inputCalls[currentInputIndex];
+    const prompt = inputCall?.prompt || "Input";
+    const displayOutput = interactiveOutput + prompt + "\n" + value + "\n";
+    setInteractiveOutput(displayOutput);
+    
+    if (newInputs.length < totalInputsNeeded) {
+      // More inputs needed
+      setCurrentInputIndex(newInputs.length);
+      setIsWaitingForInput(true);
+    } else {
+      // All inputs collected, run code
+      setIsWaitingForInput(false);
+      setOutput("Running...");
+      
+      try {
+        const result = await run.mutateAsync({
+          id: selected.id,
+          code,
+          input: newInputs.join('\n')
+        });
+
+        const cleanedRuntimeOutput = stripInputPromptsFromOutput(
+          result.output || "",
+          inputCalls.map((c) => c.prompt || "")
+        );
+
+        const finalOutput = formatInteractiveOutput(
+          inputCalls.map((c) => c.prompt || ""),
+          newInputs,
+          cleanedRuntimeOutput
+        );
+
+        setInteractiveOutput(finalOutput);
+        setOutput(finalOutput);
+
+        if (result.error) {
+          setError(result.error);
+        } else if (result.passed) {
+          setError(null);
+          setOutput((prev) => (prev ? prev + "\n\n" : "") + "✅ Challenge completed successfully!");
+        }
+      } catch (e: any) {
+        setError(e?.message || "Failed to run");
+      } finally {
+        setIsInteractiveMode(false);
+      }
     }
   };
 
@@ -83,7 +186,7 @@ export default function Challenges() {
       <div className="max-w-6xl mx-auto py-8 px-4 grid lg:grid-cols-2 gap-8">
         <div className="space-y-6">
           <h1 className="text-2xl font-bold">Interview Challenges</h1>
-          {["Easy", "Medium", "Hard", "Other"].map((key) => (
+          {["Easy", "Medium", "Hard"].map((key) => (
             <div key={key}>
               <div className="text-sm font-semibold mb-2">{key}</div>
               <div className="space-y-2">
@@ -118,6 +221,7 @@ export default function Challenges() {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 spellCheck={false}
+                placeholder="Write your Python code here..."
               />
               <div className="flex gap-3">
                 <button
@@ -142,11 +246,35 @@ export default function Challenges() {
                   <pre className="text-xs font-mono text-accent whitespace-pre-wrap">{selected.solutionCode}</pre>
                 </div>
               )}
-              <div className="p-3 rounded-lg border border-border">
-                <div className="text-sm font-medium">Output</div>
-                <pre className="text-xs whitespace-pre-wrap mt-2">{output || " "}</pre>
-                {error && <div className="text-xs text-destructive mt-2">{error}</div>}
-              </div>
+              
+              {isInteractiveMode ? (
+                <InteractiveConsole 
+                  isWaitingForInput={isWaitingForInput}
+                  onInputSubmit={handleInteractiveInput}
+                  output={interactiveOutput}
+                  error={error || undefined}
+                  isRunning={run.isPending}
+                  prompts={inputCalls.map((c) => c.prompt || "")}
+                  currentPromptIndex={currentInputIndex}
+                />
+              ) : (
+                <div className="p-3 rounded-lg border border-border bg-[#0f0f0f]">
+                  <div className="text-sm font-medium mb-2">Output</div>
+                  <div className="text-xs text-gray-400 mb-2">{getConsoleHelpText(code)}</div>
+                  <div className="font-mono text-xs whitespace-pre-wrap">
+                    {output ? (
+                      formatConsoleOutput(output).lines.map((line, idx) => (
+                        <div key={idx} className={line.className}>
+                          {line.text || '\u00A0'}
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-gray-600">Click "Run Code" to see output...</span>
+                    )}
+                  </div>
+                  {error && <div className="text-xs text-red-400 mt-2">Error: {error}</div>}
+                </div>
+              )}
             </div>
           )}
         </div>

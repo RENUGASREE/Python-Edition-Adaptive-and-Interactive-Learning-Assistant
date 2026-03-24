@@ -254,7 +254,56 @@ def answer_with_rag(query: str, topic: Optional[str] = None):
     query_lower = query.lower()
     results = retrieve_context(query, topic=topic)
     
-    # Base response structure
+    # Try to use OpenAI for intelligent response if available
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        try:
+            from openai import OpenAI
+            base_url = os.getenv("OPENAI_BASE_URL")
+            model = os.getenv("OPENAI_MODEL", "openchat/openchat-7b")
+            timeout = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
+            
+            client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+            
+            # Build context from retrieved results
+            context = ""
+            if results:
+                context = "\n\n".join([f"Lesson: {entry['topic']}\n{entry['content']}" for entry in results])
+            
+            # Create prompt with context
+            system_prompt = """You are a helpful AI tutor for a programming learning platform. 
+            Provide clear, educational responses to help students learn programming concepts.
+            Be encouraging and break down complex topics into simple steps."""
+            
+            user_prompt = f"Question: {query}"
+            if topic:
+                user_prompt += f"\nTopic: {topic}"
+            if context:
+                user_prompt += f"\n\nContext from lessons:\n{context}\n\nUse this context to help answer the question."
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+            
+            if response.choices:
+                ai_response = response.choices[0].message.content
+                return {
+                    "response": ai_response,
+                    "source_topic": results[0]["topic"] if results else topic,
+                    "confidence_score": 0.9,
+                    "sources": results
+                }
+        except Exception as e:
+            logger.error(f"OpenAI API call failed: {e}")
+            # Fall back to template responses
+    
+    # Fallback template-based responses
     response_parts = []
     
     if "hint" in query_lower:
