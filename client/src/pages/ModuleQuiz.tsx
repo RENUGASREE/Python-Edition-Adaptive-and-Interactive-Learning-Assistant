@@ -1,7 +1,6 @@
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useLesson } from "@/hooks/use-lessons";
 import { useModule } from "@/hooks/use-modules";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -72,66 +71,140 @@ export default function ModuleQuiz() {
     return (filtered.length > 0 ? filtered : lessons).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
   }, [module, moduleLevel]);
 
-  const lessonId = moduleLessons[0]?.id || 0;
-  const { data: lesson, isLoading: loadingLesson } = useLesson(lessonId);
-  // Use the first lesson's quiz (questions are generated based on module topic)
-  const quiz = lesson?.quizzes?.[0];
-  const questions = quiz?.questions || [];
+  const effectiveQuestions = useMemo(() => {
+    if (!moduleId || !module) return [];
 
-  const generatedQuiz = useMemo(() => {
-    if (questions.length > 0 || !lesson) {
-      return [];
-    }
-    const text = `${lesson.title}\n${lesson.content}`;
-    const lower = text.toLowerCase();
-    const generated: any[] = [];
+    const baseText = `${(module as any)?.title || ""}\n${(module as any)?.description || ""}`;
+    const lessonTitles = (moduleLessons || []).map((l: any) => String(l?.title || "")).join("\n");
+    const lower = `${baseText}\n${lessonTitles}`.toLowerCase();
 
-    if (lower.includes("loop") || lower.includes("for ") || lower.includes("while ")) {
-      generated.push({
-        id: -1,
-        text: "Which statement iterates over a sequence in Python?",
-        options: [
-          { id: 0, text: "for", correct: true },
-          { id: 1, text: "iterate", correct: false },
-          { id: 2, text: "repeat", correct: false },
-          { id: 3, text: "switch", correct: false },
-        ],
+    const questions: any[] = [];
+    const seen = new Set<string>();
+    const signature = (text: string, options: string[]) => {
+      const normText = String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
+      const normOpts = (options || []).map((o) => String(o || "").trim().toLowerCase().replace(/\s+/g, " "));
+      return `${normText}||${normOpts.join("|")}`;
+    };
+    const pushQ = (text: string, options: string[], correct: number) => {
+      const key = signature(text, options);
+      if (seen.has(key)) return;
+      seen.add(key);
+      const idx = questions.length;
+      questions.push({
+        id: -(moduleId * 1000 + idx + 1),
+        text,
+        options: options.map((opt, i) => ({ id: i, text: opt, correct: i === correct })),
         points: 10,
       });
+    };
+
+    if (lower.includes("variable") || lower.includes("assign") || lower.includes("=")) {
+      pushQ(
+        "Which statement correctly assigns the integer 5 to a variable named x?",
+        ["x = 5", "int x = 5", "x := 5", "let x = 5"],
+        0
+      );
+    }
+
+    if (lower.includes("data type") || lower.includes("int") || lower.includes("string") || lower.includes("float")) {
+      pushQ(
+        "Which of the following is a valid Python string literal?",
+        ["'hello'", "hello", "string(hello)", "<hello>"],
+        0
+      );
+    }
+
+    if (lower.includes("loop") || lower.includes("for ") || lower.includes("while ") || lower.includes("iteration")) {
+      pushQ(
+        "What does the keyword 'break' do inside a loop?",
+        ["Skips to next iteration", "Exits the loop", "Restarts the loop", "Stops the program"],
+        1
+      );
+      pushQ(
+        "Which loop is commonly used to iterate over items in a list?",
+        ["for", "repeat-until", "do-while", "switch"],
+        0
+      );
+    }
+
+    if (lower.includes("list") || lower.includes("array") || lower.includes("index")) {
+      pushQ(
+        "What is the index of the first element in a Python list?",
+        ["0", "1", "-1", "Depends on the list"],
+        0
+      );
     }
 
     if (lower.includes("function") || lower.includes("def ") || lower.includes("return")) {
-      generated.push({
-        id: -2,
-        text: "Which keyword defines a function in Python?",
-        options: [
-          { id: 0, text: "func", correct: false },
-          { id: 1, text: "def", correct: true },
-          { id: 2, text: "function", correct: false },
-          { id: 3, text: "lambda", correct: false },
-        ],
-        points: 10,
-      });
+      pushQ(
+        "Which keyword is used to define a function in Python?",
+        ["def", "func", "function", "define"],
+        0
+      );
+      pushQ(
+        "What does a 'return' statement do in a function?",
+        ["Prints a value", "Ends the function and sends a value back", "Starts a loop", "Creates a variable"],
+        1
+      );
     }
 
-    if (!generated.length) {
-      generated.push({
-        id: -99,
+    if (lower.includes("dictionary") || lower.includes("dict") || lower.includes("key")) {
+      pushQ(
+        "Which data structure stores key-value pairs in Python?",
+        ["list", "tuple", "dict", "set"],
+        2
+      );
+    }
+
+    if (lower.includes("class") || lower.includes("object") || lower.includes("oop")) {
+      pushQ(
+        "Which keyword is used to define a class in Python?",
+        ["class", "object", "struct", "new"],
+        0
+      );
+    }
+
+    // Ensure at least 5 questions (module quiz must be unique and non-empty)
+    const fallbackPool: Array<{ text: string; options: string[]; correct: number }> = [
+      {
         text: "What does the Python len() function return?",
-        options: [
-          { id: 0, text: "Length of a sequence", correct: true },
-          { id: 1, text: "Type of a variable", correct: false },
-          { id: 2, text: "Memory address", correct: false },
-          { id: 3, text: "None", correct: false },
-        ],
-        points: 10,
-      });
+        options: ["Length of a sequence", "Type of a variable", "Memory address", "None"],
+        correct: 0,
+      },
+      {
+        text: "Which of these creates a list in Python?",
+        options: ["[]", "{}", "()", "<>"],
+        correct: 0,
+      },
+      {
+        text: "Which keyword is used to handle exceptions in Python?",
+        options: ["try", "catch", "throw", "error"],
+        correct: 0,
+      },
+      {
+        text: "What is the result of 3 ** 2 in Python?",
+        options: ["6", "9", "8", "5"],
+        correct: 1,
+      },
+      {
+        text: "Which statement prints text to the console in Python?",
+        options: ["print('hi')", "echo 'hi'", "console.log('hi')", "printf('hi')"],
+        correct: 0,
+      },
+      {
+        text: "Which operator checks equality in Python?",
+        options: ["==", "=", "!=", "<="] ,
+        correct: 0,
+      },
+    ];
+
+    for (const q of fallbackPool) {
+      if (questions.length >= 5) break;
+      pushQ(q.text, q.options, q.correct);
     }
 
-    return generated;
-  }, [questions, lesson]);
-
-  const effectiveQuestions = questions.length > 0 ? questions : generatedQuiz;
+    return questions.slice(0, 10);
+  }, [module, moduleId, moduleLessons]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +236,7 @@ export default function ModuleQuiz() {
 
   const handleSubmit = async (quizAnswers: Record<number, number>) => {
     setError(null);
-    if (!quiz || questions.length === 0) {
+    if (effectiveQuestions.length === 0) {
       setError("No module quiz is available right now.");
       return;
     }
@@ -217,7 +290,7 @@ export default function ModuleQuiz() {
     }
   };
 
-  if (loadingModule || loadingLesson || loadingAttempts) {
+  if (loadingModule || loadingAttempts) {
     return (
       <Layout>
         <div className="flex items-center justify-center h-full py-20">
