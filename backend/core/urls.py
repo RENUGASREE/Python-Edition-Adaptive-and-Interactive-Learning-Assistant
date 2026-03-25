@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RegisterView, LoginView, UserProfileView, LogoutView, RunChallengeView, ProgressViewSet, QuizAttemptViewSet, BadgeViewSet, CertificateViewSet, RecommendationViewSet, ChatMessageViewSet, ModuleViewSet, LessonViewSet, UserProgressViewSet, QuizViewSet, QuestionViewSet, ChallengeViewSet, MasteryUpdateView, AdaptiveRecommendationView, SubmitQuizView, AITutorView, CertificateDownloadView
+from .views import RegisterView, LoginView, UserProfileView, LogoutView, RunChallengeView, ProgressViewSet, QuizAttemptViewSet, BadgeViewSet, CertificateViewSet, RecommendationViewSet, ChatMessageViewSet, ModuleViewSet, LessonViewSet, UserProgressViewSet, QuizViewSet, QuestionViewSet, ChallengeViewSet, MasteryUpdateView, AdaptiveRecommendationView, SubmitQuizView, AITutorView, CertificateDownloadView, TopicViewSet, UserSubmissionViewSet
 
 router = DefaultRouter()
 router.register(r'modules', ModuleViewSet)
@@ -14,6 +14,8 @@ router.register(r'quiz-attempts', QuizAttemptViewSet)
 router.register(r'badges', BadgeViewSet)
 router.register(r'certificates', CertificateViewSet)
 router.register(r'recommendations', RecommendationViewSet)
+router.register(r'topics', TopicViewSet)
+router.register(r'user-submissions', UserSubmissionViewSet)
 router.register(r'chatmessages', ChatMessageViewSet)
 
 urlpatterns = [

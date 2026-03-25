@@ -34,20 +34,35 @@ def mastery_progression(user: User):
                 "source": "module"
             })
         
-        # Average lesson quiz scores per week as progression points
+# Average lesson quiz scores per week as progression points
         user_id = user.original_uuid or str(user.id)
         lesson_progress = UserProgress.objects.filter(
             user_id=user_id,
             completed=True,
             score__isnull=False
         ).order_by('completed_at')
-        if lesson_progress.exists():
+        
+        # NEW: UserSubmission scores (code challenges)
+        from core.models import UserSubmission
+        submission_scores = UserSubmission.objects.filter(
+            user=user,
+            score__gt=0
+        ).values_list('created_at', 'score').order_by('created_at')
+        
+        if lesson_progress.exists() or submission_scores.exists():
             # Group by week to show progression over time
             from collections import defaultdict
             weekly_scores = defaultdict(list)
+            
+            # UserProgress (lessons/quizzes)
             for prog in lesson_progress:
                 week_key = (prog.completed_at.year, prog.completed_at.isocalendar()[1])
                 weekly_scores[week_key].append(prog.score)
+            
+            # UserSubmission (code challenges)
+            for created_at, score in submission_scores:
+                week_key = (created_at.year, created_at.isocalendar()[1])
+                weekly_scores[week_key].append(int(score))
             
             for (year, week), scores in sorted(weekly_scores.items()):
                 avg_score = sum(scores) / len(scores)
@@ -55,8 +70,8 @@ def mastery_progression(user: User):
                 week_date = datetime.strptime(f"{year} {week} 1", "%Y %W %w")
                 entries.append({
                     "created_at": week_date,
-                    "overall_score": avg_score / 100.0,
-                    "source": "lessons"
+                    "overall_score": min(avg_score / 100.0, 1.0),
+                    "source": "lessons_challenges"
                 })
         
         # Sort by date

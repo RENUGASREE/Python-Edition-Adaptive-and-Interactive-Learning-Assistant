@@ -65,9 +65,24 @@ class Challenge(models.Model):
     class Meta:
         db_table = 'challenges'
 
+class Topic(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    canonical_name = models.CharField(max_length=100, unique=True, db_index=True)
+    description = models.TextField(blank=True)
+    order = models.PositiveIntegerField(default=0, db_index=True)
+
+    class Meta:
+        verbose_name_plural = "topics"
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
 class UserProgress(models.Model):
-    user_id = models.TextField() # Points to UUID in users table (legacy)
-    lesson_id = models.IntegerField(db_index=True)
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='progress')
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, null=True, blank=True, related_name='user_progress')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, null=True, blank=True)
     completed = models.BooleanField(blank=True, null=True)
     score = models.IntegerField(blank=True, null=True)
     last_code = models.TextField(blank=True, null=True)
@@ -75,6 +90,11 @@ class UserProgress(models.Model):
 
     class Meta:
         db_table = 'user_progress'
+        indexes = [
+            models.Index(fields=['user', 'lesson']),
+            models.Index(fields=['user', 'topic']),
+            models.Index(fields=['user', 'completed']),
+        ]
 
 # --- End Content Models ---
 
@@ -98,7 +118,7 @@ class QuizAttempt(models.Model):
 # --- End Quiz Models ---
 
 class Progress(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='legacy_progress')
     topic = models.CharField(max_length=255, db_index=True)
     mastery = models.IntegerField(default=0)
     last_updated = models.DateTimeField(auto_now_add=True)
@@ -141,6 +161,39 @@ class Recommendation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+class UserSubmission(models.Model):
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='submissions')
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE)
+    challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, null=True, blank=True)
+    code = models.TextField()
+    score = models.FloatField()
+    passed_tests = models.IntegerField()
+    total_tests = models.IntegerField()
+    attempts = models.IntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'challenge']),
+            models.Index(fields=['user', 'topic']), 
+            models.Index(fields=['user', 'created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.pk:  # New submission
+            # Calculate attempts
+            attempts = UserSubmission.objects.filter(
+                user=self.user,
+                challenge=self.challenge
+            ).count() + 1
+            self.attempts = attempts
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.topic.name} (score: {self.score})"
+
 
 class ChatMessage(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

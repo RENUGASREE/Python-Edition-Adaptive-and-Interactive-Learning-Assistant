@@ -1,15 +1,17 @@
 from django.contrib.auth import authenticate, login, logout
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta, Topic, UserSubmission
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import UserSerializer, ProgressSerializer, QuizAttemptSerializer, BadgeSerializer, CertificateSerializer, RecommendationSerializer, ChatMessageSerializer, ModuleSerializer, LessonSerializer, UserProgressSerializer, QuizSerializer, QuestionSerializer, ChallengeSerializer, UserMasterySerializer, DiagnosticAttemptSerializer, DiagnosticQuestionMetaSerializer
+from .serializers import UserSerializer, ProgressSerializer, QuizAttemptSerializer, BadgeSerializer, CertificateSerializer, RecommendationSerializer, ChatMessageSerializer, ModuleSerializer, LessonSerializer, UserProgressSerializer, QuizSerializer, QuestionSerializer, ChallengeSerializer, UserMasterySerializer, DiagnosticAttemptSerializer, DiagnosticQuestionMetaSerializer, TopicSerializer, UserSubmissionSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.http import HttpResponse
+from django.db import transaction
+from rest_framework import viewsets
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
@@ -415,6 +417,9 @@ class LogoutView(APIView):
 class RunChallengeView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
+    @transaction.atomic()
+
+
     def strip_input_prompts(self, code, text):
         import re
         if not text:
@@ -592,16 +597,57 @@ class RunChallengeView(APIView):
                         if not all_passed:
                             error_message = f"Expected '{cleaned_expected}', got '{cleaned_stdout}'"
 
-            if challenge and challenge.lesson_id:
-                lesson = Lesson.objects.filter(id=challenge.lesson_id).first()
-                if lesson:
-                    topic = LessonProfile.objects.filter(lesson_id=lesson.id).values_list("topic", flat=True).first() or lesson.title
-                    log_assessment_interaction(request.user, topic, all_passed, 0, 0, "challenge")
-                    update_engagement(request.user, 0.01 if all_passed else -0.01)
+            # === PERSISTENCE + GAMIFICATION PIPELINE ===
+            lesson = Lesson.objects.filter(id=challenge.lesson_id).first() if challenge and challenge.lesson_id else None
+            if lesson:
+                topic_profile = LessonProfile.objects.filter(lesson_id=lesson.id).first()
+                topic_obj = None
+                if topic_profile:
+                    try:
+                        topic_obj = Topic.objects.get(canonical_name__iexact=normalize_topic(topic_profile.topic or ""))
+                    except Topic.DoesNotExist:
+                        pass
+                
+                if topic_obj:
+                    # 1. Save submission
+                    passed_count = sum(1 for tc in test_cases if self.is_output_equivalent(str(tc.get("expected", "")), ""))
+                    UserSubmission.objects.create(
+                        user=request.user,
+                        topic=topic_obj,
+                        challenge=challenge,
+                        code=code,
+                        score=(passed_count / len(test_cases)) * 100 if test_cases else (100 if all_passed else 0),
+                        passed_tests=passed_count,
+                        total_tests=len(test_cases),
+                    )
+                    
+                    # 2. Update progress
+                    progress, _ = UserProgress.objects.update_or_create(
+                        user=request.user,
+                        lesson=lesson,
+                        defaults={
+                            'completed': all_passed,
+                            'score': 100 if all_passed else passed_count * 10,
+                            'last_code': code,
+                            'completed_at': timezone.now() if all_passed else None
+                        }
+                    )
+                    
+                    # 3. Gamification
+                    xp = 50 if all_passed else 10
+                    add_xp(request.user, xp, f"Challenge '{challenge.title}' ({'passed' if all_passed else 'attempt'})")
+                    update_streak(request.user)
+                    
+                    # 4. Analytics
+                    log_assessment_interaction(request.user, topic_obj.name, all_passed, 0, 0, "challenge")
+                    analyze_user_skill_gaps(request.user)
+            
             return Response({
                 'output': combined_output,
                 'error': error_message,
-                'passed': all_passed
+                'passed': all_passed,
+                'xp_gained': 50 if all_passed else 10,
+                'attempts': UserSubmission.objects.filter(user=request.user, challenge=challenge).count() if challenge else 0
             })
 
         except subprocess.TimeoutExpired:
@@ -616,11 +662,6 @@ class RunChallengeView(APIView):
                 'error': str(e),
                 'passed': False
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        finally:
-            try:
-                analyze_user_skill_gaps(request.user)
-            except Exception:
-                pass
 
 
 class ModuleViewSet(viewsets.ModelViewSet):
@@ -1213,6 +1254,24 @@ class CertificateViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
+
+class TopicViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Topic.objects.all()
+    serializer_class = TopicSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+
+class UserSubmissionViewSet(viewsets.ModelViewSet):
+    serializer_class = UserSubmissionSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+    queryset = UserSubmission.objects.all()
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user).order_by('-created_at')[:50]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 
 class CertificateDownloadView(APIView):
     permission_classes = (permissions.IsAuthenticated,)

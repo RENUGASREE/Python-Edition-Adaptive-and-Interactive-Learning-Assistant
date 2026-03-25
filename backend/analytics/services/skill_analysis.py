@@ -17,15 +17,28 @@ def _categorize(acc: float) -> str:
 
 @transaction.atomic
 def analyze_user_skill_gaps(user: User) -> Tuple[Dict[str, float], Dict[str, str]]:
+    from core.models import UserSubmission
+    
     rows = AssessmentInteraction.objects.filter(user=user)
     totals: Dict[str, int] = {}
     corrects: Dict[str, int] = {}
+    
+    # Quizzes/interactions
     for r in rows:
         topic = (r.topic or "").strip()
         if not topic:
             continue
         totals[topic] = totals.get(topic, 0) + 1
         if r.correctness:
+            corrects[topic] = corrects.get(topic, 0) + 1
+    
+    # Code submissions (UserSubmission)
+    submissions = UserSubmission.objects.filter(user=user)
+    for submission in submissions:
+        topic = submission.topic.name
+        totals[topic] = totals.get(topic, 0) + 1
+        # Score >= 80% = correct
+        if submission.score >= 80.0:
             corrects[topic] = corrects.get(topic, 0) + 1
     accuracy_map: Dict[str, float] = {}
     status_map: Dict[str, str] = {}

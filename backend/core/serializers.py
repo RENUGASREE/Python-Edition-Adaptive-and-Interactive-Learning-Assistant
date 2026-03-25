@@ -2,7 +2,7 @@ import re
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserProgress, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserProgress, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta, Topic, UserSubmission
 from lessons.models import LessonProfile
 from django.db.models import Sum
 from datetime import timedelta
@@ -396,19 +396,34 @@ class ModuleSerializer(serializers.ModelSerializer):
 
 # --- End Content Serializers ---
 
+class TopicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Topic
+        fields = ('id', 'name', 'canonical_name', 'description', 'order')
+
+
+class UserSubmissionSerializer(serializers.ModelSerializer):
+    userId = serializers.IntegerField(source='user.id', read_only=True)
+    topicName = serializers.CharField(source='topic.name', read_only=True)
+    challengeId = serializers.IntegerField(source='challenge.id', read_only=True)
+    
+    class Meta:
+        model = UserSubmission
+        fields = ('id', 'userId', 'topicName', 'challengeId', 'topic', 'challenge', 'code', 
+                 'score', 'passed_tests', 'total_tests', 'attempts', 'created_at')
+        read_only_fields = ('attempts', 'created_at')
+
+
 class UserProgressSerializer(serializers.ModelSerializer):
-    userId = serializers.CharField(source='user_id', read_only=False)
-    lessonId = serializers.IntegerField(source='lesson_id')
+    userId = serializers.IntegerField(source='user.id', read_only=True)
+    lessonId = serializers.IntegerField(source='lesson.id', read_only=True)
+    topicName = serializers.CharField(source='topic.name', read_only=True)
     lastCode = serializers.CharField(source='last_code', required=False, allow_blank=True)
     completedAt = serializers.DateTimeField(source='completed_at', required=False, allow_null=True)
 
     class Meta:
         model = UserProgress
-        fields = ('id', 'userId', 'lessonId', 'completed', 'score', 'lastCode', 'completedAt')
-    
-    def create(self, validated_data):
-        # Remove userId if present and use the one from the request
-        return super().create(validated_data)
+        fields = ('id', 'userId', 'lessonId', 'topicName', 'topic', 'lesson', 'completed', 'score', 'lastCode', 'completedAt')
 
 class ProgressSerializer(serializers.ModelSerializer):
     class Meta:
