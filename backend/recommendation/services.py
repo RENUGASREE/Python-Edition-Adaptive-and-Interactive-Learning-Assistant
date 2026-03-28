@@ -284,17 +284,39 @@ def _progress_user_id(user: User) -> str:
 
 def _normalize_track(level: str | None) -> str:
     lower = (level or "").strip().lower()
-    if lower in ("advanced", "pro"):
+    if lower == "pro":
         return "Pro"
     if lower == "intermediate":
         return "Intermediate"
     return "Beginner"
 
 
+def _get_module_difficulty(user: User, topic: str) -> str:
+    """
+    Return the per-module difficulty tier stored in the user's mastery_vector
+    after the placement quiz.  Falls back to the global user.level.
+
+    Stored under mastery_vector['_module_difficulty'][<canon_topic>].
+    """
+    mastery_vector = user.mastery_vector or {}
+    module_difficulty_map = mastery_vector.get("_module_difficulty") or {}
+    canon = normalize_topic(topic)
+    tier = module_difficulty_map.get(canon)
+    if tier and tier in ("Pro", "Intermediate", "Beginner"):
+        return tier
+    # Fallback to global user level
+    return _normalize_track(getattr(user, "level", None))
+
+
 def _pick_next_lesson_for_topic(user: User, topic: str) -> tuple[Lesson | None, Module | None]:
     """
     Pick the earliest not-yet-completed lesson for the user within a topic,
-    honoring per-lesson prerequisites from LessonProfile.
+    honouring the *per-module* difficulty tier derived from the placement quiz.
+
+    Difficulty mapping (per module score):
+      >= 75%  => 'Pro'
+      >= 50%  => 'Intermediate'
+      <  50%  => 'Beginner'
     """
     canon = normalize_topic(topic)
     aliases = [canon]
@@ -310,9 +332,12 @@ def _pick_next_lesson_for_topic(user: User, topic: str) -> tuple[Lesson | None, 
     if not lesson_ids:
         return None, None
 
-    target = _normalize_track(getattr(user, "level", None))
+    # Use per-module difficulty for this topic
+    target = _get_module_difficulty(user, topic)
+
     lessons_qs = Lesson.objects.filter(id__in=lesson_ids, difficulty=target).order_by("module_id", "order", "id")
     if not lessons_qs.exists():
+        # Graceful fallback: try all difficulties for this topic
         lessons_qs = Lesson.objects.filter(id__in=lesson_ids).order_by("module_id", "order", "id")
     lessons = list(lessons_qs[:200])
     if not lessons:
@@ -341,7 +366,7 @@ def _pick_next_lesson_for_topic(user: User, topic: str) -> tuple[Lesson | None, 
             module = Module.objects.filter(id=lesson.module_id).first()
             return lesson, module
 
-    # All completed (or prerequisites block); return the first lesson in this topic as a safe fallback.
+    # All completed (or prerequisites block); return the first lesson as a safe fallback.
     first = lessons[0]
     return first, Module.objects.filter(id=first.module_id).first()
 
@@ -364,9 +389,12 @@ def recommend_next(user: User):
     scoring_fn = compute_priority_score if assignment.strategy_name == "A" else compute_priority_score_b
     score, topic, mastery, failure_rate, prereq_weight, engagement, velocity_weight, struggle_weight, difficulty_adjustment = _rank_topics(user, scoring_fn)
     lesson, module = _pick_next_lesson_for_topic(user, topic)
+
+    # Resolve the per-module difficulty that was actually used for this recommendation
+    module_difficulty_assigned = _get_module_difficulty(user, topic)
     base_difficulty = None
     if lesson:
-        base_difficulty = lesson.difficulty or "Beginner"
+        base_difficulty = lesson.difficulty or module_difficulty_assigned
 
     reason = {
         "mastery": mastery,
@@ -377,9 +405,10 @@ def recommend_next(user: User):
         "struggle_weight": struggle_weight,
         "difficulty_adjustment_factor": difficulty_adjustment["factor"],
         "priority_score": score,
+        "module_difficulty_assigned": module_difficulty_assigned,
     }
 
-    base_difficulty = base_difficulty or "Beginner"
+    base_difficulty = base_difficulty or module_difficulty_assigned or "Beginner"
     log_difficulty_shift(
         user,
         topic,
@@ -404,6 +433,13 @@ def recommend_next(user: User):
     if difficulty_adjustment["factor"] < 0:
         explanations.append("Temporarily lowered difficulty to reinforce fundamentals")
         reason_codes.append("difficulty_adjust_down")
+    # Explain placement-based difficulty assignments
+    if module_difficulty_assigned == "Pro":
+        explanations.append(f"Assigned Pro lessons — strong placement score in {topic}")
+        reason_codes.append("placement_pro")
+    elif module_difficulty_assigned == "Intermediate":
+        explanations.append(f"Assigned Intermediate lessons — foundational score in {topic}")
+        reason_codes.append("placement_intermediate")
     if velocity_weight < 0.2:
         explanations.append("Learning pace suggests focusing on fundamentals")
         reason_codes.append("low_velocity")

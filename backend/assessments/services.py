@@ -8,9 +8,25 @@ from recommendation.services import update_behavior_from_interaction, update_top
 
 
 def _difficulty_tier(weighted_score_pct: float) -> str:
-    if weighted_score_pct > 0.70:
-        return "Advanced"
-    if weighted_score_pct > 0.35:
+    """Global tier based on overall weighted score."""
+    if weighted_score_pct >= 0.75:
+        return "Pro"
+    if weighted_score_pct >= 0.50:
+        return "Intermediate"
+    return "Beginner"
+
+
+def _module_difficulty_tier(module_score: float) -> str:
+    """
+    Per-module difficulty assignment based on placement quiz score.
+
+    >= 75%  -> Pro        (user is strong in this module)
+    >= 50%  -> Intermediate (user has foundational knowledge)
+    <  50%  -> Beginner   (user needs fundamentals first)
+    """
+    if module_score >= 0.75:
+        return "Pro"
+    if module_score >= 0.50:
         return "Intermediate"
     return "Beginner"
 
@@ -70,38 +86,50 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
     tier = _difficulty_tier(weighted)
 
     if update_user:
-        # Get all unique topics from current lessons to ensure full coverage
         from core.models import Lesson, UserMastery
         all_topics = set(Lesson.objects.values_list("title", flat=True))
-        
+
         mastery_vector = user.mastery_vector or {}
-        baseline = max(0.0, raw_score - 0.2) 
-        
+        baseline = max(0.0, raw_score - 0.2)
+
         for t in all_topics:
             canon_t = normalize_topic(t)
             if canon_t not in mastery_vector:
                 mastery_vector[canon_t] = baseline
 
-        # Update with actual scores
+        # Build per-module difficulty map based on individual module scores
+        module_difficulty_map = mastery_vector.get("_module_difficulty") or {}
+
         for topic, score in module_scores.items():
             canon_topic = normalize_topic(topic)
             mastery_vector[canon_topic] = score
-            
+
+            # Assign per-module difficulty tier
+            module_difficulty = _module_difficulty_tier(score)
+            module_difficulty_map[canon_topic] = module_difficulty
+
             # Use module mapping if available
-            target_module = Lesson.objects.filter(module_id__icontains=topic.replace("mod-", "")).values_list("module_id", flat=True).first()
+            target_module = (
+                Lesson.objects.filter(module_id__icontains=topic.replace("mod-", ""))
+                .values_list("module_id", flat=True)
+                .first()
+            )
             if not target_module:
-                target_module = topic # Fallback
-            
+                target_module = topic  # Fallback
+
             UserMastery.objects.update_or_create(
                 user=user,
                 module_id=target_module,
-                defaults={"mastery_score": score, "last_source": "diagnostic"}
+                defaults={"mastery_score": score, "last_source": "diagnostic"},
             )
-            
+
+        # Persist the per-module difficulty map inside mastery_vector
+        mastery_vector["_module_difficulty"] = module_difficulty_map
+
         user.mastery_vector = mastery_vector
         user.diagnostic_completed = True
         user.has_taken_quiz = True
-        user.level = tier
+        user.level = tier  # Global fallback tier
         user.save(update_fields=["mastery_vector", "diagnostic_completed", "has_taken_quiz", "level"])
         update_engagement(user, 0.05)
     return module_scores, raw_score, weighted, tier
