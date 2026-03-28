@@ -22,12 +22,12 @@ export function useModules(options?: { enabled?: boolean }) {
   });
 }
 
-export function useModule(id: number) {
+export function useModule(id: string) {
   const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ["/api/modules", id],
     queryFn: async () => {
-      return refreshAndRetry<unknown>((token) =>
+      return refreshAndRetry<ModuleWithLessons>((token) =>
         fetch(apiUrl(`/api/modules/${id}/`), {
           credentials: "include",
           headers: { Authorization: `Bearer ${token}` },

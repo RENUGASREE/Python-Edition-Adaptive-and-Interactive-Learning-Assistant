@@ -56,7 +56,7 @@ export default function PlacementQuiz() {
     enabled: !!user,
   });
 
-  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [answers, setAnswers] = useState<Record<string, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(900);
@@ -65,7 +65,7 @@ export default function PlacementQuiz() {
   const [tabWarning, setTabWarning] = useState(false);
   const [violationDialog, setViolationDialog] = useState(false);
   const [warningMessage, setWarningMessage] = useState<string>("");
-  const [attemptId, setAttemptId] = useState<number | null>(null);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const lastViolationTsRef = useMemo(() => ({ ts: 0 }), []);
@@ -75,7 +75,7 @@ export default function PlacementQuiz() {
       try {
         const meta = diagnostic?.attemptMeta;
         if (meta?.attemptId) {
-          setAttemptId(Number(meta.attemptId));
+          setAttemptId(String(meta.attemptId));
         }
         if (meta?.startTime && meta?.durationSeconds) {
           const startMillis = new Date(meta.startTime).getTime();
@@ -177,7 +177,7 @@ export default function PlacementQuiz() {
   const quiz = diagnostic?.quiz;
   const questions = diagnostic?.questions || [];
 
-  const handleSelect = (questionId: number, optionIndex: number) => {
+  const handleSelect = (questionId: string, optionIndex: number) => {
     if (expired) return;
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   };
@@ -216,10 +216,15 @@ export default function PlacementQuiz() {
         },
         body: JSON.stringify({
           quizId: quiz.id,
-          answers: questions.map((q: any) => ({
-            questionId: q.id,
-            selectedIndex: answers[q.id],
-          })),
+          answers: questions.map((q: any) => {
+            const tempOpts = Array.isArray(q.options) ? q.options : [];
+            const selectedOpt = answers[q.id] !== undefined ? tempOpts[answers[q.id]] : null;
+            return {
+              questionId: q.id,
+              selectedIndex: answers[q.id] !== undefined ? answers[q.id] : -1,
+              isCorrect: selectedOpt?.is_correct || selectedOpt?.correct || false,
+            };
+          }),
           violationCount,
         }),
         credentials: "include",
@@ -248,7 +253,7 @@ export default function PlacementQuiz() {
         setExpired(true);
         // Ensure user data is refetched so firstLessonId can be calculated
         await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-        setTimeout(() => setLocation("/dashboard"), 400);
+        setTimeout(() => setLocation("/dashboard"), 2000);
       }
     } catch (err: any) {
       setError(err.message || "Failed to submit diagnostic quiz");
@@ -271,7 +276,7 @@ export default function PlacementQuiz() {
       });
       const data = await res.json().catch(() => ({}));
       const meta = data?.attemptMeta;
-      if (meta?.attemptId) setAttemptId(Number(meta.attemptId));
+      if (meta?.attemptId) setAttemptId(String(meta.attemptId));
       if (meta?.startTime && meta?.durationSeconds) {
         const startMillis = new Date(meta.startTime).getTime();
         const deadline = startMillis + (meta.durationSeconds * 1000);

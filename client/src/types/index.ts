@@ -12,15 +12,15 @@ export interface User {
 }
 
 export interface Module {
-  id: number;
+  id: string;
   title: string;
   description: string;
   order: number;
 }
 
 export interface Lesson {
-  id: number;
-  module_id: number;
+  id: string;
+  module_id: string;
   title: string;
   content: string;
   order: number;
@@ -30,14 +30,14 @@ export interface Lesson {
 }
 
 export interface Quiz {
-  id: number;
-  lesson_id: number;
+  id: string;
+  lesson_id: string;
   title: string;
 }
 
 export interface Question {
-  id: number;
-  quiz_id: number;
+  id: string;
+  quiz_id: string;
   text: string;
   type: string;
   options: any[];
@@ -45,8 +45,8 @@ export interface Question {
 }
 
 export interface Challenge {
-  id: number;
-  lesson_id: number;
+  id: string;
+  lesson_id: string;
   title: string;
   description: string;
   initial_code: string;
@@ -56,10 +56,12 @@ export interface Challenge {
 }
 
 export interface UserProgress {
-  id: number;
+  id: string;
   userId: string;
-  lessonId: number;
+  lessonId: string;
   completed: boolean;
+  quizCompleted?: boolean;
+  challengeCompleted?: boolean;
   score: number;
   lastCode?: string;
   completedAt?: string;

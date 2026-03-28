@@ -27,12 +27,12 @@ export default function Curriculum() {
   const { data: progress, isLoading: loadingProgress } = useUserProgress();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const [lockedAlert, setLockedAlert] = useState<{ open: boolean; title: string; type: 'module' | 'lesson' | 'placement' }>({
+  const [lockedAlert, setLockedAlert] = useState<{ open: boolean; title: string; type: 'module' | 'lesson' | 'placement' | 'moduleQuiz' }>({
     open: false,
     title: "",
     type: 'module'
   });
-  const [openModules, setOpenModules] = useState<Record<number, boolean>>({ 1: true });
+  const [openModules, setOpenModules] = useState<Record<string, boolean>>({});
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
     queryKey: ["/api/quiz-attempts"],
     queryFn: async () => {
@@ -49,9 +49,9 @@ export default function Curriculum() {
 
   const parseModuleLevel = (notes?: string) => {
     if (!notes) return null;
-    const match = notes.match(/module:(\d+):level:([A-Za-z]+)/i);
+    const match = notes.match(/module:([^:]+):level:([A-Za-z]+)/i);
     if (!match) return null;
-    return { moduleId: Number(match[1]), level: match[2] };
+    return { moduleId: match[1], level: match[2] };
   };
 
   const normalizeLevel = (level?: string | null) => {
@@ -62,7 +62,7 @@ export default function Curriculum() {
   };
 
   const moduleLevels = useMemo(() => {
-    const levels: Record<number, string> = {};
+    const levels: Record<string, string> = {};
     (quizAttempts || []).forEach((attempt: any) => {
       const parsed = parseModuleLevel(attempt?.notes);
       if (parsed && parsed.moduleId) {
@@ -146,11 +146,11 @@ export default function Curriculum() {
     );
   }
 
-  const isLessonCompleted = (lessonId: number) => {
+  const isLessonCompleted = (lessonId: string) => {
     return progress?.find(p => p.lessonId === lessonId)?.completed;
   };
 
-  const isModuleCompleted = (moduleId: number) => {
+  const isModuleCompleted = (moduleId: string) => {
     const module = (modules as any[])?.find(m => m.id === moduleId);
     if (!module || !module.lessons || module.lessons.length === 0) return false;
     const fallback = user?.level || "Beginner";
@@ -160,7 +160,7 @@ export default function Curriculum() {
     return lessons.every(l => isLessonCompleted(l.id));
   };
 
-  const isModuleLocked = (moduleId: number) => {
+  const isModuleLocked = (moduleId: string) => {
     const module = (modules as any[])?.find(m => m.id === moduleId);
     if (!module || module.order === 1) return false;
     
@@ -169,7 +169,7 @@ export default function Curriculum() {
   };
 
   const placementCompleted = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
-  const isLessonLocked = (lessonId: number) => {
+  const isLessonLocked = (lessonId: string) => {
     // Try to find the lesson in the modules data to see if the API already told us it's unlocked
     const lessonFromModules = modules?.flatMap((m: any) => m.lessons || []).find((l: any) => l.id === lessonId);
     if (lessonFromModules && typeof (lessonFromModules as any).unlocked !== 'undefined') {
@@ -195,7 +195,7 @@ export default function Curriculum() {
     setLockedAlert({ open: true, title, type });
   };
 
-  const toggleModule = (moduleId: number) => {
+  const toggleModule = (moduleId: string) => {
     setOpenModules(prev => ({ ...prev, [moduleId]: !prev[moduleId] }));
   };
 
@@ -334,19 +334,33 @@ export default function Curriculum() {
                         <div className="mb-4">
                           <div className={cn(
                             "flex items-center justify-between p-4 rounded-xl border transition-all",
-                            locked ? "bg-muted/20 border-border opacity-60" : "bg-card border-border"
+                            (locked || module.quizLocked) ? "bg-muted/20 border-border opacity-60" : "bg-card border-border shadow-sm hover:shadow-md"
                           )}>
                             <div className="space-y-1">
-                              <div className="font-medium">Module Quiz</div>
+                              <div className="font-medium flex items-center gap-2">
+                                Module Quiz
+                                {module.quizLocked && <Lock className="w-3 h-3 text-muted-foreground" />}
+                              </div>
                               <div className="text-sm text-muted-foreground">
-                                {moduleQuizCompleted ? `Completed · ${levelLabel} track` : "Take the quiz to personalize this module"}
+                                {module.quizCompleted 
+                                  ? `Completed · ${levelLabel} track` 
+                                  : module.quizLocked 
+                                    ? "Complete all lessons to unlock the module quiz"
+                                    : "Take the quiz to test your module mastery"}
                               </div>
                             </div>
-                            {locked ? (
-                              <Button variant="secondary" onClick={() => handleLockedClick(module.title, "module")}>Locked</Button>
+                            {locked || module.quizLocked ? (
+                              <Button 
+                                variant="secondary" 
+                                onClick={() => locked ? handleLockedClick(module.title, "module") : handleLockedClick(module.title, "moduleQuiz")}
+                              >
+                                Locked
+                              </Button>
                             ) : (
                               <Link href={`/module/${module.id}/quiz`}>
-                                <Button>{moduleQuizCompleted ? "Retake Quiz" : "Start Quiz"}</Button>
+                                <Button className="shadow-lg shadow-primary/20">
+                                  {module.quizCompleted ? "Retake Quiz" : "Start Quiz"}
+                                </Button>
                               </Link>
                             )}
                           </div>
@@ -422,6 +436,8 @@ export default function Curriculum() {
                 ? `Complete all lessons in the previous module to unlock "${lockedAlert.title}".`
                 : lockedAlert.type === "placement"
                 ? "Complete the placement quiz to unlock your first lesson."
+                : lockedAlert.type === "moduleQuiz"
+                ? `Complete all lessons in "${lockedAlert.title}" to access the module quiz.`
                 : `Finish the previous lesson to start "${lockedAlert.title}".`}
             </AlertDialogDescription>
           </AlertDialogHeader>

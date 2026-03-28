@@ -17,15 +17,20 @@ def _difficulty_tier(weighted_score_pct: float) -> str:
 
 def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_count: int = 0, update_user: bool = True) -> Tuple[Dict, float, float, str]:
     questions = list(DiagnosticQuestion.objects.filter(quiz_id=quiz_id))
-    answer_map = {
-        int(a["questionId"]): {
-            "selectedIndex": int(a.get("selectedIndex", -1)),
-            "timeSpent": float(a.get("timeSpent", 0)),
-            "hintsUsed": int(a.get("hintsUsed", 0)),
-        }
-        for a in answers
-        if "questionId" in a
-    }
+    answer_map = {}
+    for a in answers:
+        try:
+            q_id_val = a.get("questionId")
+            if q_id_val is not None:
+                answer_map[str(q_id_val)] = {
+                    "selectedIndex": int(a.get("selectedIndex", -1)),
+                    "isCorrect": bool(a.get("isCorrect", False)),
+                    "timeSpent": float(a.get("timeSpent", 0)),
+                    "hintsUsed": int(a.get("hintsUsed", 0)),
+                }
+        except (ValueError, TypeError):
+            continue
+
     module_totals = {}
     module_correct = {}
     total = 0
@@ -38,13 +43,15 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
         total_points += int(getattr(question, "points", 1) or 1)
         canon_topic = normalize_topic(question.topic)
         module_totals[canon_topic] = module_totals.get(canon_topic, 0) + 1
-        selected_payload = answer_map.get(question.id)
-        selected_index = selected_payload.get("selectedIndex") if selected_payload else None
-        is_correct = selected_index is not None and selected_index == question.correct_index
+        
+        selected_payload = answer_map.get(str(question.id))
+        
+        is_correct = selected_payload.get("isCorrect") is True if selected_payload else False
         if is_correct:
             correct += 1
             correct_points += int(getattr(question, "points", 1) or 1)
             module_correct[canon_topic] = module_correct.get(canon_topic, 0) + 1
+        
         AssessmentInteraction.objects.create(
             user=user,
             topic=canon_topic,
@@ -63,9 +70,34 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
     tier = _difficulty_tier(weighted)
 
     if update_user:
+        # Get all unique topics from current lessons to ensure full coverage
+        from core.models import Lesson, UserMastery
+        all_topics = set(Lesson.objects.values_list("title", flat=True))
+        
         mastery_vector = user.mastery_vector or {}
+        baseline = max(0.0, raw_score - 0.2) 
+        
+        for t in all_topics:
+            canon_t = normalize_topic(t)
+            if canon_t not in mastery_vector:
+                mastery_vector[canon_t] = baseline
+
+        # Update with actual scores
         for topic, score in module_scores.items():
-            mastery_vector[normalize_topic(topic)] = score
+            canon_topic = normalize_topic(topic)
+            mastery_vector[canon_topic] = score
+            
+            # Use module mapping if available
+            target_module = Lesson.objects.filter(module_id__icontains=topic.replace("mod-", "")).values_list("module_id", flat=True).first()
+            if not target_module:
+                target_module = topic # Fallback
+            
+            UserMastery.objects.update_or_create(
+                user=user,
+                module_id=target_module,
+                defaults={"mastery_score": score, "last_source": "diagnostic"}
+            )
+            
         user.mastery_vector = mastery_vector
         user.diagnostic_completed = True
         user.has_taken_quiz = True

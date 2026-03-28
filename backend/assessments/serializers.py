@@ -16,12 +16,17 @@ class DiagnosticQuestionSerializer(serializers.ModelSerializer):
         fields = ("id", "quiz", "topic", "difficulty", "text", "options", "correct_index", "points")
 
     def get_options(self, obj):
+        import random
         # Prefer related DiagnosticOption records; fallback to JSONField if present
         opts = list(DiagnosticOption.objects.filter(question=obj).values("text", "is_correct"))
-        if opts:
-            return opts
-        raw = obj.options or []
-        return [{"text": str(t), "is_correct": (i == obj.correct_index)} for i, t in enumerate(raw)]
+        if not opts:
+            raw = obj.options or []
+            opts = [{"text": str(t), "is_correct": (i == obj.correct_index)} for i, t in enumerate(raw)]
+        
+        # Shuffle the combined options list
+        shuffled = list(opts)
+        random.shuffle(shuffled)
+        return shuffled
 
 
 class DiagnosticAttemptSerializer(serializers.ModelSerializer):

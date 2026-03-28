@@ -14,7 +14,7 @@ class RecommendationEvent(models.Model):
     strategy_name = models.CharField(max_length=50)
     strategy_version = models.CharField(max_length=20)
     algorithm_name = models.CharField(max_length=100)
-    recommended_lesson_id = models.IntegerField(null=True, blank=True)
+    recommended_lesson_id = models.CharField(max_length=255, null=True, blank=True)
     recommended_topic = models.CharField(max_length=255, null=True, blank=True)
     recommendation_confidence = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)

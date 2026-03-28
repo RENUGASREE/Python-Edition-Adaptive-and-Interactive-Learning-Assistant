@@ -1,9 +1,11 @@
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { useLesson, useRunChallenge } from "@/hooks/use-lessons";
 import { useUserProgress, useUpdateProgress } from "@/hooks/use-progress";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Play, ChevronRight, AlertCircle, RotateCcw, Code2, Bot, Sparkles, X } from "lucide-react";
+import { Loader2, Play, ChevronRight, AlertCircle, RotateCcw, Code2, Bot, Sparkles, X, Target, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
+import { formatConsoleOutput, getConsoleHelpText } from "@/lib/console-formatter";
 import { Editor } from "@/components/Editor";
 import { TerminalConsole, InteractiveConsole } from "@/components/TerminalConsole";
 import { useMastery } from "@/hooks/use-mastery";
@@ -23,7 +25,8 @@ const ChatTutor = lazy(() => import("@/components/ChatTutor").then((mod) => ({ d
 
 export default function LessonView() {
   const { id } = useParams();
-  const lessonId = Number(id);
+  const [, setLocation] = useLocation();
+  const lessonId = id || "";
   const { data: lesson, isLoading, error: lessonFetchError, refetch } = useLesson(lessonId);
   const { data: modules, isLoading: loadingModules } = useModules();
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
@@ -60,6 +63,7 @@ export default function LessonView() {
   const [currentInputIndex, setCurrentInputIndex] = useState(0);
   const [interactiveOutput, setInteractiveOutput] = useState("");
   const [totalInputsNeeded, setTotalInputsNeeded] = useState(0)
+  const [isCompleted, setIsCompleted] = useState(false);
   const masteryKey = (lesson as any)?.topic || lesson?.title;
   const masteryScore = masteryKey ? (masteryVector?.[masteryKey] ?? 0) : 0;
   const encouragement =
@@ -71,9 +75,9 @@ export default function LessonView() {
 
   const parseModuleLevel = (notes?: string) => {
     if (!notes) return null;
-    const match = notes.match(/module:(\d+):level:([A-Za-z]+)/i);
+    const match = notes.match(/module:([^:]+):level:([A-Za-z]+)/i);
     if (!match) return null;
-    return { moduleId: Number(match[1]), level: match[2] };
+    return { moduleId: match[1], level: match[2] };
   };
 
   const normalizeLevel = (level?: string | null) => {
@@ -84,7 +88,7 @@ export default function LessonView() {
   };
 
   const moduleLevels = useMemo(() => {
-    const levels: Record<number, string> = {};
+    const levels: Record<string, string> = {};
     (quizAttempts || []).forEach((attempt: any) => {
       const parsed = parseModuleLevel(attempt?.notes);
       if (parsed && parsed.moduleId) {
@@ -110,17 +114,17 @@ export default function LessonView() {
         return (a.order || 0) - (b.order || 0);
       });
   }, [modules, moduleLevels, user?.level]);
-  const firstLessonId = allLessons[0]?.id || 1;
+  const firstLessonId = allLessons[0]?.id || "";
 
   const currentLessonIndex = allLessons.findIndex(l => l.id === lessonId);
   const prevLessonId = currentLessonIndex > 0 ? allLessons[currentLessonIndex - 1].id : null;
   const nextLessonId = currentLessonIndex >= 0 && currentLessonIndex < allLessons.length - 1 ? allLessons[currentLessonIndex + 1].id : null;
 
-  const isLessonCompleted = (id: number) => {
+  const isLessonCompleted = (id: string) => {
     return progress?.find(p => p.lessonId === id)?.completed;
   };
 
-  const isModuleCompleted = (moduleId: number) => {
+  const isModuleCompleted = (moduleId: string) => {
     const module = (modules as any[])?.find(m => m.id === moduleId);
     if (!module || !module.lessons || module.lessons.length === 0) return false;
     const fallback = user?.level || "Beginner";
@@ -130,14 +134,14 @@ export default function LessonView() {
     return lessons.every(l => isLessonCompleted(l.id));
   };
 
-  const isModuleLocked = (moduleId: number) => {
+  const isModuleLocked = (moduleId: string) => {
     const module = (modules as any[])?.find(m => m.id === moduleId);
     if (!module || module.order === 1) return false;
     const previousModule = (modules as any[])?.find(m => m.order === module.order - 1);
     return previousModule ? !isModuleCompleted(previousModule.id) : false;
   };
 
-  const isLessonLocked = (id: number) => {
+  const isLessonLocked = (id: string) => {
     // If it's the current lesson and the API says it's unlocked, trust it.
     if (id === lessonId && lesson && typeof (lesson as any).unlocked !== 'undefined') {
       return !(lesson as any).unlocked;
@@ -162,19 +166,14 @@ export default function LessonView() {
     return !isLessonCompleted(previousLesson.id);
   };
 
-  const lessonSections = useMemo(() => {
-    const raw = lesson?.content || "";
-    const chunks = raw.split("\n\n").map((chunk) => chunk.trim()).filter(Boolean);
-    const explanation = chunks[0] || "Review the explanation and key idea for this topic.";
-    const codeMatch = raw.match(/```(?:python)?\n([\s\S]*?)```/);
-    const codeBlock = codeMatch?.[1]?.trim() || "print('Hello, Python!')";
-    return {
-      explanation,
-      syntax: codeBlock,
-      example: codeBlock,
-      practice: lesson?.challenges?.[0]?.description || "Complete the practice challenge to solidify mastery.",
-    };
-  }, [lesson]);
+  // Scroll progress state
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const progress = (target.scrollTop / (target.scrollHeight - target.clientHeight)) * 100;
+    setScrollProgress(progress);
+  };
 
   // Initialize code when lesson loads to challenge starter code or empty as fallback
   useEffect(() => {
@@ -226,7 +225,7 @@ export default function LessonView() {
         
         if (result.error) {
           setError(result.error);
-        } else if (result.passed) {
+        } else if ((result as any).passed || !result.error) {
           confetti({
             particleCount: 100,
             spread: 70,
@@ -240,14 +239,8 @@ export default function LessonView() {
           setMasteryImpact(0.06);
           
           if (user) {
-            progressMutation.mutate({
-              userId: String(user.id),
-              lessonId,
-              completed: true,
-              lastCode: code,
-              score: 100,
-              completedAt: new Date().toISOString()
-            });
+            // Refetch progress to see if both requirements are now met
+            refetch();
           }
         } else {
           setError(result.error || "Code ran but didn't pass all test cases. Check your output above.");
@@ -281,7 +274,7 @@ export default function LessonView() {
 
     try {
       const result = await runMutation.mutateAsync({
-        id: lesson.challenges[0].id,
+        id: lesson?.challenges?.[0].id as string,
         code: code.trim(),
         input: newInputs.join("\n"),
       });
@@ -303,7 +296,7 @@ export default function LessonView() {
 
       if (result.error) {
         setError(result.error);
-      } else if (result.passed) {
+      } else if ((result as any).passed) {
         confetti({
           particleCount: 100,
           spread: 70,
@@ -325,6 +318,7 @@ export default function LessonView() {
             score: 100,
             completedAt: new Date().toISOString(),
           });
+          setIsCompleted(true);
         }
 
         setOutput((prev) => (prev ? prev + "\n\n" : "") + "✅ All tests passed!");
@@ -465,19 +459,37 @@ export default function LessonView() {
              )}
              {nextLessonId && (
                <Link href={`/lesson/${nextLessonId}`}>
-                 <button 
-                   className="p-2 hover:bg-muted rounded-lg transition-colors border border-border flex items-center gap-1 text-sm font-medium" 
-                   title="Next Lesson"
-                 >
-                   <span>Next</span>
-                   <ChevronRight className="w-4 h-4" />
-                 </button>
+                 <Button 
+                  size="lg"
+                  className="rounded-full px-8 h-14 text-lg font-semibold gap-2 shadow-lg shadow-primary/20"
+                  onClick={() => {
+                    const completed = isLessonCompleted(lessonId);
+                    if (!completed) {
+                      toast({
+                        title: "Mastery Required",
+                        description: "Please complete both the Coding Challenge and the Knowledge Check to unlock the next session.",
+                        variant: "default",
+                      });
+                      return;
+                    }
+                    
+                    const nextId = (lesson as any).nextLessonId;
+                    if (nextId) {
+                      setLocation(`/lesson/${nextId}`);
+                    } else {
+                      setLocation('/curriculum');
+                    }
+                  }}
+                >
+                  Next Lesson
+                  <ArrowRight className="w-5 h-5" />
+                </Button>
                </Link>
              )}
            </div>
            {/* Progress Indicator */}
            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full">
-             <span>Level: {lesson.difficulty}</span>
+             <span>Track: {lesson.difficulty === "Advanced" ? "Pro" : lesson.difficulty}</span>
            </div>
         </div>
       </header>
@@ -485,51 +497,69 @@ export default function LessonView() {
       {/* Main Content Split */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Pane: Content */}
-        <div className="w-1/2 border-r border-border bg-card/30 overflow-y-auto p-8 scrollbar-thin">
+        <div 
+          className="w-1/2 border-r border-border bg-card/30 overflow-y-auto p-8 scrollbar-thin relative"
+          onScroll={handleScroll}
+        >
+          {/* Scroll Progress Bar */}
+          <div className="absolute top-0 left-0 w-full h-1 z-10 bg-muted/20">
+            <div 
+              className="h-full bg-primary transition-all duration-150" 
+              style={{ width: `${scrollProgress}%` }}
+            />
+          </div>
+
           <div className="max-w-2xl mx-auto markdown-content">
-            <div className="mb-6 p-4 rounded-xl border border-border bg-card">
+            <div className="mb-10 p-6 rounded-2xl border border-border bg-card shadow-sm">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <div className="text-sm text-muted-foreground">Mastery for this topic</div>
-                  <div className="text-xl font-semibold">{Math.round(masteryScore * 100)}%</div>
+                  <div className="text-sm font-medium text-muted-foreground mb-1 uppercase tracking-wider">Your Mastery</div>
+                  <div className="text-3xl font-bold text-primary">{Math.round(masteryScore * 100)}%</div>
+                </div>
+                <div className="p-3 bg-primary/10 rounded-xl">
+                  <Target className="w-6 h-6 text-primary" />
                 </div>
               </div>
-              <div className="text-sm text-muted-foreground mt-3">{encouragement}</div>
-              <div className="text-xs text-muted-foreground mt-2">
-                Complete the quiz or challenge below to mark this lesson as done.
-              </div>
+              <div className="text-sm text-muted-foreground mt-4 italic">"{encouragement}"</div>
             </div>
              
-             <ReactMarkdown>{lesson.content}</ReactMarkdown>
+             <ReactMarkdown>
+               {lesson.content.split(/🧪 Knowledge Check|❓ Knowledge Check|Knowledge Check/i)[0]}
+             </ReactMarkdown>
             
             {(lesson as any)?.quizzes?.length > 0 && (
-              <div className="mt-12 p-8 border border-border rounded-2xl bg-card shadow-sm">
-                <div className="flex items-center justify-between mb-6">
+              <div className="mt-16 p-8 border border-border rounded-3xl bg-card/50 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-8">
                   <div>
-                    <h3 className="text-xl font-bold tracking-tight">Check Your Knowledge</h3>
-                    <p className="text-sm text-muted-foreground mt-1">Select the correct option for each question to test your understanding.</p>
+                    <h3 className="text-2xl font-bold tracking-tight mb-1">Knowledge Check</h3>
+                    <p className="text-sm text-muted-foreground">Test your understanding of the concepts above.</p>
                   </div>
-                  <Bot className="w-5 h-5 text-primary opacity-50" />
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <Bot className="w-5 h-5 text-primary" />
+                  </div>
                 </div>
                 <QuizView
                   questions={(lesson as any).quizzes?.[0]?.questions || []}
                   onSubmit={async (answers) => {
                     try {
-                      // Calculate score
                       const questions = (lesson as any).quizzes?.[0]?.questions || [];
                       const correctCount = questions.reduce((acc: number, q: any) => {
                         const selectedIdx = answers[q.id];
                         const isCorrect = q.options?.[selectedIdx]?.correct;
                         return isCorrect ? acc + 1 : acc;
                       }, 0);
-                      const score = (correctCount / questions.length) * 100;
+                      const score = Math.round((correctCount / questions.length) * 100);
 
                       await progressMutation.mutateAsync({
                         lessonId: lessonId,
-                        completed: true,
+                        completed: false, // Mastery is now calculated on backend
                         score: score,
+                        quizCompleted: true,
                         lastCode: JSON.stringify(answers)
                       });
+                      
+                      // Refetch to see if overall completion is now True
+                      refetch();
                       
                       toast({
                         title: "Knowledge Check Completed",
@@ -554,15 +584,30 @@ export default function LessonView() {
             )}
              
              {lesson.challenges?.[0] && (
-               <div className="mt-12 p-6 bg-primary/5 border border-primary/20 rounded-2xl relative overflow-hidden group">
-                 <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                   <Code2 className="w-16 h-16" />
+               <div className="mt-16 p-8 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 rounded-3xl relative overflow-hidden group">
+                 <div className="absolute -top-4 -right-4 p-8 opacity-5 group-hover:opacity-10 transition-all duration-500 rotate-12">
+                   <Code2 className="w-32 h-32" />
                  </div>
-                 <h3 className="text-lg font-bold text-primary mb-3 flex items-center gap-2">
-                   <Sparkles className="w-5 h-5" /> Active Learning Challenge
+                 <h3 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
+                   <Sparkles className="w-6 h-6" /> Coding Challenge
                  </h3>
-                 <div className="markdown-content prose prose-sm dark:prose-invert max-w-none">
+                 <div className="markdown-content">
                    <ReactMarkdown>{lesson.challenges[0].description}</ReactMarkdown>
+                 </div>
+                 <div className="mt-6 flex items-center gap-2 text-sm text-primary font-medium">
+                   <ChevronRight className="w-4 h-4" /> Use the editor on the right to solve
+                 </div>
+               </div>
+             )}
+
+             {isLessonCompleted(lessonId) && (
+               <div className="mt-16 p-8 bg-primary/5 border border-primary/20 rounded-3xl text-center space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                 <div className="inline-flex p-4 bg-primary/10 rounded-full">
+                    <Sparkles className="w-8 h-8 text-primary" />
+                 </div>
+                 <div>
+                    <h3 className="text-2xl font-bold">Lesson Mastered!</h3>
+                    <p className="text-muted-foreground mt-2">You've successfully completed all requirements for this lesson.</p>
                  </div>
                </div>
              )}
@@ -570,45 +615,38 @@ export default function LessonView() {
         </div>
 
         {/* Right Pane: Code Editor */}
-        <div className="w-1/2 flex flex-col bg-[#1e1e1e]">
-          {/* Toolbar */}
-          <div className="h-12 bg-[#252526] border-b border-[#333] flex items-center justify-between px-4 shrink-0">
-             <div className="flex items-center gap-2">
-               <div className="px-3 py-1 bg-[#37373d] text-xs text-white rounded">main.py</div>
-             </div>
-             
-             <div className="flex items-center gap-2">
-               <button 
-                 onClick={() => setCode(lesson.challenges?.[0]?.initial_code || "")}
-                 className="p-1.5 text-muted-foreground hover:text-white hover:bg-[#37373d] rounded transition-colors"
-                 title="Reset Code"
-               >
-                 <RotateCcw className="w-4 h-4" />
-               </button>
-               <button
-                 onClick={handleRun}
-                 disabled={runMutation.isPending}
-                 className="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded transition-all disabled:opacity-50"
-               >
-                 {runMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3 fill-current" />}
-                 Run Code
-               </button>
-             </div>
+        <div className="w-1/2 p-8 overflow-y-auto space-y-4 bg-background">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">Interactive Runner</h2>
+            <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">main.py</div>
+          </div>
+          
+          <div className="h-80 rounded-lg overflow-hidden border border-border bg-[#1e1e1e]">
+            <Editor 
+              code={code} 
+              onChange={setCode}
+            />
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={handleRun}
+              disabled={runMutation.isPending}
+              className="px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg disabled:opacity-50 flex items-center gap-2"
+            >
+              {runMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
+              {runMutation.isPending ? "Running..." : "Run Code"}
+            </button>
+            <button
+              onClick={() => setCode(lesson.challenges?.[0]?.initial_code || "")}
+              className="px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted font-medium flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" /> Reset
+            </button>
           </div>
 
-          {/* Editor Area */}
-          <div className="flex-1 overflow-hidden relative flex flex-col">
-            <div className="flex-1 overflow-hidden relative">
-              <Editor 
-                code={code} 
-                onChange={setCode}
-              />
-            </div>
-          </div>
-
-          {/* Console / Output */}
-          <div className="h-1/3 border-t border-[#333] bg-[#0f0f0f] flex flex-col shrink-0">
-            {isInteractiveMode ? (
+          {isInteractiveMode ? (
+            <div className="h-64 rounded-lg overflow-hidden border border-border">
               <InteractiveConsole 
                 isWaitingForInput={isWaitingForInput}
                 onInputSubmit={handleInteractiveInput}
@@ -618,10 +656,34 @@ export default function LessonView() {
                 prompts={inputCalls.map((c) => c.prompt || "")}
                 currentPromptIndex={currentInputIndex}
               />
-            ) : (
-              <TerminalConsole output={output} error={error || undefined} isRunning={runMutation.isPending} />
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-lg border border-border bg-[#0f0f0f] shadow-inner min-h-48 flex flex-col">
+              <div className="text-sm font-medium mb-1 text-white flex items-center justify-between">
+                <span>Console Output</span>
+                {runMutation.isPending && <span className="text-yellow-500 animate-pulse text-xs">Running...</span>}
+              </div>
+              <div className="text-xs text-gray-500 mb-3 border-b border-[#333] pb-2">{getConsoleHelpText(code)}</div>
+              
+              <div className="font-mono text-sm whitespace-pre-wrap flex-1 overflow-auto">
+                {output ? (
+                  formatConsoleOutput(output).lines.map((line, idx) => (
+                    <div key={idx} className={line.className}>
+                      {line.text || '\u00A0'}
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-gray-600 italic">Click "Run Code" to see the output here...</span>
+                )}
+                {error && (
+                  <div className="mt-3 text-red-400 bg-red-400/10 p-2 rounded flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div>{error}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

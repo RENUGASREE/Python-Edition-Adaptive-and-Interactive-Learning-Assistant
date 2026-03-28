@@ -105,4 +105,13 @@ def generate_quiz_from_lesson(lesson) -> List[Dict]:
             "correct": 2,
         })
 
+    # Shuffle the options for each question and update the correct index
+    import random
+    for q in questions:
+        original_options = list(q["options"])
+        correct_answer = original_options[q["correct"]]
+        random.shuffle(original_options)
+        q["options"] = original_options
+        q["correct"] = original_options.index(correct_answer)
+
     return questions

@@ -11,7 +11,7 @@ type LessonResponse = Lesson & {
 };
 
 
-export function useLesson(id: number) {
+export function useLesson(id: string) {
   const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ["/api/lessons", id],
@@ -29,8 +29,8 @@ export function useLesson(id: number) {
 
 export function useRunChallenge() {
   return useMutation({
-    mutationFn: async ({ id, code, input }: { id: number; code: string; input?: string }) => {
-      return refreshAndRetry<{ output?: string; error?: string; result?: unknown }>((token) =>
+    mutationFn: async ({ id, code, input }: { id: string; code: string; input?: string }) => {
+      return refreshAndRetry<{ output?: string; error?: string; passed?: boolean; result?: unknown }>((token) =>
         fetch(apiUrl(`/api/challenges/${id}/run/`), {
           method: "POST",
           headers: {

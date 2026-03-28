@@ -8,14 +8,14 @@ interface QuizOption {
 
 interface QuizViewProps {
   questions: any[];
-  onSubmit: (answers: Record<number, number>) => void;
+  onSubmit: (answers: Record<string, number>) => void;
 }
 
 export default function QuizView({ questions, onSubmit }: QuizViewProps) {
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [feedback, setFeedback] = useState<Record<number, { correct: boolean; selected: number }>>({});
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [feedback, setFeedback] = useState<Record<string, { correct: boolean; selected: number }>>({});
 
-  const handleSelect = (questionId: number, optionIndex: number) => {
+  const handleSelect = (questionId: string, optionIndex: number) => {
     if (feedback[questionId]) return; // Already answered
 
     const question = questions.find((q: any) => q.id === questionId);

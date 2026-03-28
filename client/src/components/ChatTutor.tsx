@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 
 interface ChatTutorProps {
-  lessonId: number;
+  lessonId: string;
   lessonTitle: string;
   lessonContent: string;
 }
@@ -70,7 +70,7 @@ function ChatConversation({
   lessonTitle,
   lessonContent,
 }: {
-  conversationKey: number;
+  conversationKey: string;
   lessonTitle: string;
   lessonContent: string;
 }) {

@@ -53,6 +53,8 @@ export function useUpdateProgress() {
             score: data.score || 0,
             lastCode: data.lastCode || "",
             completedAt: (data as any).completedAt || null,
+            quizCompleted: (data as any).quizCompleted,
+            challengeCompleted: (data as any).challengeCompleted,
           }),
           credentials: "include",
         })

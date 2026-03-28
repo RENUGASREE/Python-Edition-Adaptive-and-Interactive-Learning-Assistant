@@ -5,17 +5,18 @@ import { useState } from "react";
 import { useRunChallenge } from "@/hooks/use-lessons";
 import { Loader2 } from "lucide-react";
 import { formatConsoleOutput, getConsoleHelpText } from "@/lib/console-formatter";
-import { InteractiveConsole } from "@/components/TerminalConsole";
+import { TerminalConsole, InteractiveConsole } from "@/components/TerminalConsole";
 import { parseInputCalls, getInputCount, formatInteractiveOutput, stripInputPromptsFromOutput } from "@/lib/interactive-console";
+import { CheckCircle2, XCircle, Play, RotateCcw, Lightbulb } from "lucide-react";
 
 type Challenge = {
   id: number;
   title: string;
   description: string;
   difficulty?: string | null;
-  initialCode: string;
-  solutionCode?: string | null;
-  testCases: any;
+  initial_code: string;
+  solution_code?: string | null;
+  test_cases: any;
 };
 
 export default function Challenges() {
@@ -231,7 +232,7 @@ export default function Challenges() {
                 >
                   {run.isPending ? "Running..." : "Run Code"}
                 </button>
-                {selected.solutionCode && (
+                {selected.solution_code && (
                   <button
                     onClick={() => setShowSolution(!showSolution)}
                     className="px-4 py-2 border border-border rounded-lg text-sm hover:bg-muted"
@@ -240,39 +241,60 @@ export default function Challenges() {
                   </button>
                 )}
               </div>
-              {showSolution && selected.solutionCode && (
+              {showSolution && selected.solution_code && (
                 <div className="p-4 rounded-lg bg-accent/10 border border-accent/20">
                   <div className="text-sm font-semibold mb-2">Reference Solution</div>
-                  <pre className="text-xs font-mono text-accent whitespace-pre-wrap">{selected.solutionCode}</pre>
+                  <pre className="text-xs font-mono text-accent whitespace-pre-wrap">{selected.solution_code}</pre>
                 </div>
               )}
               
               {isInteractiveMode ? (
-                <InteractiveConsole 
-                  isWaitingForInput={isWaitingForInput}
-                  onInputSubmit={handleInteractiveInput}
-                  output={interactiveOutput}
-                  error={error || undefined}
-                  isRunning={run.isPending}
-                  prompts={inputCalls.map((c) => c.prompt || "")}
-                  currentPromptIndex={currentInputIndex}
-                />
+                <div className="h-[300px] rounded-xl overflow-hidden border border-border/50 shadow-2xl">
+                  <InteractiveConsole 
+                    isWaitingForInput={isWaitingForInput}
+                    onInputSubmit={handleInteractiveInput}
+                    output={interactiveOutput}
+                    error={error || undefined}
+                    isRunning={run.isPending}
+                    prompts={inputCalls.map((c) => c.prompt || "")}
+                    currentPromptIndex={currentInputIndex}
+                  />
+                </div>
               ) : (
-                <div className="p-3 rounded-lg border border-border bg-[#0f0f0f]">
-                  <div className="text-sm font-medium mb-2">Output</div>
-                  <div className="text-xs text-gray-400 mb-2">{getConsoleHelpText(code)}</div>
-                  <div className="font-mono text-xs whitespace-pre-wrap">
-                    {output ? (
-                      formatConsoleOutput(output).lines.map((line, idx) => (
-                        <div key={idx} className={line.className}>
-                          {line.text || '\u00A0'}
-                        </div>
-                      ))
-                    ) : (
-                      <span className="text-gray-600">Click "Run Code" to see output...</span>
-                    )}
+                <div className="h-[300px] rounded-xl overflow-hidden border border-border/50 shadow-2xl">
+                  <TerminalConsole 
+                    output={output}
+                    error={error || undefined}
+                    isRunning={run.isPending}
+                  />
+                </div>
+              )}
+
+              {/* Test Cases Summary */}
+              {selected.test_cases && Array.isArray(selected.test_cases) && (
+                <div className="p-4 rounded-xl border border-border/40 bg-card/30 backdrop-blur-sm">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Test Requirements
                   </div>
-                  {error && <div className="text-xs text-red-400 mt-2">Error: {error}</div>}
+                  <div className="space-y-2">
+                    {selected.test_cases.map((tc: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between text-sm py-1 border-b border-border/20 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                          <span className="text-muted-foreground">Input:</span>
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                            {tc.input ? tc.input.replace(/\n/g, ' ↵ ') : "None"}
+                          </code>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">Expected:</span>
+                          <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs font-medium">
+                            {tc.expected}
+                          </code>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

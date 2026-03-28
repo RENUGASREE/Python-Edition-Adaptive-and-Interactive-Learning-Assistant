@@ -36,9 +36,11 @@ import urllib.error as urlerr
 logger = logging.getLogger(__name__)
 
 def normalize_level_for_score(score):
-    if score < 50:
+    # Ensure score is normalized to 0-100 scale
+    s = float(score)
+    if s < 50:
         return "Beginner"
-    if score < 75:
+    if s < 80:
         return "Intermediate"
     return "Advanced"
 
@@ -141,27 +143,64 @@ def _normalize_level(level):
     return "Beginner"
 
 def _lesson_ids_for_user_module(user, module_id):
-    level_map = _module_level_map(user)
-    target_level = _normalize_level(level_map.get(module_id) or user.level or "Beginner")
-    lesson_ids = list(Lesson.objects.filter(module_id=module_id, difficulty=target_level).values_list("id", flat=True))
-    if lesson_ids:
-        return lesson_ids
+    """
+    Adaptive Fetching: Returns specific lesson IDs for each topic in the module
+    based on the user's individual mastery per topic.
+    """
+    mastery_vector = user.mastery_vector or {}
+    all_lessons_in_module = Lesson.objects.filter(module_id=module_id).order_by('order')
+    
+    # Identify unique topics (titles) in this module
+    unique_topics = []
+    seen_titles = set()
+    for l in all_lessons_in_module:
+        if l.title not in seen_titles:
+            unique_topics.append(l.title)
+            seen_titles.add(l.title)
+            
+    adaptive_lesson_ids = []
+    for topic in unique_topics:
+        # Determine the target level for this specific topic
+        topic_score = mastery_vector.get(topic, 0)
+        
+        # Fallback priority: Topic Score -> Module Score -> User Global Level
+        if topic_score == 0:
+            topic_score = mastery_vector.get(str(module_id), 0)
+            
+        if topic_score > 0:
+            difficulty_label = normalize_level_for_score(topic_score * 100 if topic_score <= 1.0 else topic_score)
+        else:
+            # Final fallback to user's profile level
+            difficulty_label = user.level or "Beginner"
+            
+        target_difficulty = map_level_to_db(difficulty_label)
+        
+        # Try to find the lesson matching this topic AND difficulty
+        best_match = Lesson.objects.filter(module_id=module_id, title=topic, difficulty=target_difficulty).first()
+        
+        # Fallback if specific level doesn't exist for this topic
+        if not best_match:
+            best_match = Lesson.objects.filter(module_id=module_id, title=topic).first()
+            
+        if best_match:
+            adaptive_lesson_ids.append(best_match.id)
+            
+    if adaptive_lesson_ids:
+        # Final safety check: ensure the IDs actually exist in the DB
+        # items = Lesson.objects.filter(id__in=adaptive_lesson_ids)
+        return adaptive_lesson_ids
+        
     return list(Lesson.objects.filter(module_id=module_id).values_list("id", flat=True))
 
-def _prerequisites_met(user, lesson_id: int) -> bool:
-    profile = LessonProfile.objects.filter(lesson_id=int(lesson_id)).first()
+def _prerequisites_met(user, lesson_id: str) -> bool:
+    profile = LessonProfile.objects.filter(lesson_id=str(lesson_id)).first()
     prereqs = list((profile.prerequisites or []) if profile else [])
     if not prereqs:
         return True
-    try:
-        prereq_ids = [int(val) for val in prereqs]
-    except Exception:
-        prereq_ids = []
-        for val in prereqs:
-            try:
-                prereq_ids.append(int(val))
-            except Exception:
-                continue
+    
+    # prereqs may be list of strings (slugs) or ints (legacy)
+    prereq_ids = [str(val) for val in prereqs]
+    
     if not prereq_ids:
         return True
     user_id = _progress_user_id(user)
@@ -203,20 +242,22 @@ def _lesson_unlocked(user, lesson):
     if lesson.order == 1:
         return _prerequisites_met(user, lesson.id)
 
-    allowed_ids = _lesson_ids_for_user_module(user, lesson.module_id)
-    ordered_lessons = list(Lesson.objects.filter(id__in=allowed_ids).order_by("order"))
-    # Find the immediate previous lesson in the ordered list
-    previous_lesson = next((item for item in reversed(ordered_lessons) if item.order < lesson.order), None)
-    
-    if not previous_lesson:
-        return _prerequisites_met(user, lesson.id)
-        
     user_id = _progress_user_id(user)
-    sequential_ok = UserProgress.objects.filter(
-        user_id=user_id,
-        lesson_id=previous_lesson.id,
-        completed=True,
-    ).exists()
+    # Check if ANY version of the previous lesson (order - 1) is completed
+    prev_order = lesson.order - 1
+    previous_lessons = Lesson.objects.filter(module_id=lesson.module_id, order=prev_order)
+    
+    sequential_ok = False
+    if previous_lessons.exists():
+        prev_ids = list(previous_lessons.values_list("id", flat=True))
+        sequential_ok = UserProgress.objects.filter(
+            user_id=user_id,
+            lesson_id__in=prev_ids,
+            completed=True,
+        ).exists()
+    else:
+        # If no previous lesson exists with order-1, it might be the first available
+        sequential_ok = True
     
     return sequential_ok and _prerequisites_met(user, lesson.id)
 
@@ -280,6 +321,7 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
+            user = serializer.save()
         except Exception as e:
             # Format validation errors into a single message string
             error_messages = []
@@ -290,13 +332,11 @@ class RegisterView(generics.CreateAPIView):
                     else:
                         error_messages.append(f"{field}: {errors}")
             if not error_messages:
-                error_messages.append("Registration failed due to invalid data.")
+                error_messages.append(str(e) if str(e) else "Registration failed due to invalid data.")
             return Response({'message': '; '.join(error_messages)}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = serializer.save()
-        # login(request, user) # Removed to avoid session/CSRF issues with JWT
-        
         # Generate JWT tokens for immediate login
+        from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(user)
         
         response_data = serializer.data
@@ -598,6 +638,18 @@ class RunChallengeView(APIView):
                     topic = LessonProfile.objects.filter(lesson_id=lesson.id).values_list("topic", flat=True).first() or lesson.title
                     log_assessment_interaction(request.user, topic, all_passed, 0, 0, "challenge")
                     update_engagement(request.user, 0.01 if all_passed else -0.01)
+                    
+                    if all_passed:
+                        user_id = request.user.original_uuid or str(request.user.id)
+                        progress, _ = UserProgress.objects.get_or_create(user_id=user_id, lesson_id=lesson.id)
+                        progress.challenge_completed = True
+                        # Overall completion only if quiz is also done
+                        if progress.quiz_completed:
+                            progress.completed = True
+                            if not progress.completed_at:
+                                progress.completed_at = timezone.now()
+                        progress.save()
+                        logger.info(f"Challenge completed for user {request.user.id}, lesson {lesson.id}")
             return Response({
                 'output': combined_output,
                 'error': error_message,
@@ -744,16 +796,36 @@ class UserProgressViewSet(viewsets.ModelViewSet):
         if completed and not completed_at:
             completed_at = timezone.now()
 
-        progress, created = UserProgress.objects.update_or_create(
+        progress, created = UserProgress.objects.get_or_create(
             user_id=user_id,
             lesson_id=lesson_id,
-            defaults={
-                "completed": completed,
-                "score": score,
-                "last_code": last_code,
-                "completed_at": completed_at,
-            },
         )
+        
+        quiz_completed_val = serializer.validated_data.get("quiz_completed")
+        challenge_completed_val = serializer.validated_data.get("challenge_completed")
+
+        # Update fields only if they are provided or we are in a 'safe' state
+        if score is not None:
+            progress.score = score
+        if last_code is not None:
+            progress.last_code = last_code
+        if completed_at:
+            progress.completed_at = completed_at
+        if quiz_completed_val is not None:
+            progress.quiz_completed = quiz_completed_val
+        if challenge_completed_val is not None:
+            progress.challenge_completed = challenge_completed_val
+            
+        # Overall completion is ONLY True if both sub-flags are True
+        # (Though we trust the backend views more for these flags)
+        if progress.quiz_completed and progress.challenge_completed:
+            progress.completed = True
+            if not progress.completed_at:
+                progress.completed_at = timezone.now()
+        else:
+            progress.completed = False
+            
+        progress.save()
         lesson = Lesson.objects.filter(id=lesson_id).first()
         topic = None
         if lesson:
@@ -776,29 +848,30 @@ class UserProgressViewSet(viewsets.ModelViewSet):
                     update_shift_outcome(user, topic, mastery_before, mastery_after)
                 
                 # Logic to unlock the next lesson immediately
-                target_level = (lesson.difficulty or user.level or "Beginner").strip()
-                if target_level.lower() == "advanced":
-                    target_level = "Pro"
+                target_difficulty = (lesson.difficulty or user.level or "Beginner").strip()
                 
-                # Get all lessons in this module for this difficulty
-                target_difficulty = target_level
-                lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id, difficulty__iexact=target_difficulty).order_by('order')
-                if not lessons_in_module.exists():
-                    # Fallback if no lessons match the specific difficulty
-                    lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id).order_by('order')
-                
+                # Get all lessons in this module to find the sequence
+                lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id).order_by('order')
                 lesson_list = list(lessons_in_module)
+                
                 try:
-                    current_idx = next(i for i, l in enumerate(lesson_list) if l.id == lesson.id)
-                    if current_idx + 1 < len(lesson_list):
+                    current_idx = -1
+                    for i, l in enumerate(lesson_list):
+                        if str(l.id) == str(lesson.id):
+                            current_idx = i
+                            break
+                    
+                    if current_idx != -1 and current_idx + 1 < len(lesson_list):
                         next_lesson = lesson_list[current_idx + 1]
                         # Pre-create progress for next lesson if it doesn't exist
+                        # This marks it as "unlocked" in some UI logic
                         UserProgress.objects.get_or_create(
                             user_id=user_id,
-                            lesson_id=next_lesson.id,
+                            lesson_id=str(next_lesson.id),
                             defaults={"completed": False}
                         )
-                except (StopIteration, Exception):
+                except Exception as e:
+                    logger.error(f"Error unlocking next lesson: {str(e)}")
                     pass
 
                 lesson_ids = list(lessons_in_module.values_list("id", flat=True))
@@ -864,10 +937,11 @@ class DiagnosticSubmitView(APIView):
 
         answers_map = {}
         for answer in answers:
-            question_id = answer.get("questionId")
+            q_id = answer.get("questionId")
             selected_index = answer.get("selectedIndex")
-            if question_id is not None:
-                answers_map[int(question_id)] = selected_index
+            if q_id is not None:
+                # Convert to string to match Question.id (which is a CharField)
+                answers_map[str(q_id)] = selected_index
 
         module_totals = {}
         module_correct = {}
@@ -875,6 +949,7 @@ class DiagnosticSubmitView(APIView):
         correct_answers = 0
 
         for question in questions:
+            # question.id is already a string
             meta = DiagnosticQuestionMeta.objects.filter(question_id=question.id).first()
             if not meta:
                 continue
@@ -1111,12 +1186,27 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        
+        notes = request.data.get("notes", "")
+        score = request.data.get("score", 0)
         topic = request.data.get("topic")
         correct = request.data.get("correct")
         time_spent = request.data.get("timeSpent", 0)
         hints_used = request.data.get("hintsUsed", 0)
+
+        # Parse notes for module-level updates (e.g. "module:1:level:Pro")
+        import re
+        match = re.search(r"module:([^:]+):level:([A-Za-z]+)", notes)
+        if match:
+            module_id = match.group(1)
+            # Update the user's mastery vector so the backend knows to serve correctly
+            # normalize_level_for_score is called inside update_user_mastery
+            update_user_mastery(request.user, module_id, score, "module_quiz")
+            logger.info(f"Updated mastery vector for user {request.user.id}, module {module_id} from quiz notes.")
+
         if topic is not None and correct is not None:
             log_assessment_interaction(request.user, topic, bool(correct), float(time_spent or 0), int(hints_used or 0), "quiz")
+        
         analyze_user_skill_gaps(request.user)
         output = serializer.data
         return Response(output, status=status.HTTP_200_OK)
@@ -1126,9 +1216,12 @@ class SubmitQuizView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     def post(self, request, quiz_id):
+        # quiz_id is expected as a string slug (e.g., 'quiz-python-basics-1')
         logger.info(f"User {request.user.id} submitting quiz {quiz_id}")
         try:
-            quiz = Quiz.objects.get(id=quiz_id)
+            quiz = Quiz.objects.filter(id=str(quiz_id)).first()
+            if not quiz:
+                raise Quiz.DoesNotExist()
         except Quiz.DoesNotExist:
             logger.warning(f"Quiz not found: {quiz_id}")
             return Response({"message": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -1185,10 +1278,29 @@ class SubmitQuizView(APIView):
         # Analyze skill gaps
         analyze_user_skill_gaps(request.user)
 
+        # Update UserProgress
+        user = request.user
+        user_id = user.original_uuid or str(user.id)
+        is_passed = (score / total_questions) >= 0.8 if total_questions > 0 else True
+        
+        if is_passed:
+            progress, _ = UserProgress.objects.get_or_create(user_id=user_id, lesson_id=quiz.lesson_id)
+            progress.quiz_completed = True
+            progress.score = int((score / total_questions) * 100) if total_questions > 0 else 100
+            
+            # Overall completion ONLY if challenge is also done
+            if progress.challenge_completed:
+                progress.completed = True
+                if not progress.completed_at:
+                    progress.completed_at = timezone.now()
+            progress.save()
+            logger.info(f"Quiz completed for user {user.id}, lesson {quiz.lesson_id}")
+
         return Response({
             "score": score,
             "total": total_questions,
-            "percentage": round((score / total_questions) * 100, 2) if total_questions > 0 else 0
+            "percentage": round((score / total_questions) * 100, 2) if total_questions > 0 else 0,
+            "passed": is_passed
         })
 
 
@@ -1355,3 +1467,75 @@ class AITutorView(APIView):
         except Exception as e:
             logger.error(f"OpenRouter unexpected error: {e}")
             return Response({"error": "AI service not available. Please try again later."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class ModuleQuizView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, module_id):
+        user = request.user
+        module = Module.objects.filter(id=module_id).first()
+        if not module:
+            return Response({"message": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check if all adaptive lessons in the module are completed
+        is_completed = _module_completed(user, module.id)
+        
+        # We need the lesson IDs to fetch questions even if locked (for metadata) 
+        # but normally we only fetch questions if unlocked.
+        lesson_ids = _lesson_ids_for_user_module(user, module.id)
+        
+        if not is_completed:
+            user_id = _progress_user_id(user)
+            completed_count = UserProgress.objects.filter(
+                user_id=user_id,
+                lesson_id__in=lesson_ids,
+                completed=True,
+            ).count()
+            
+            return Response({
+                "id": f"module-quiz-{module.id}",
+                "title": f"{module.title} Comprehensive Quiz",
+                "locked": True,
+                "completedLessons": completed_count,
+                "totalLessons": len(lesson_ids),
+                "questions": []
+            })
+
+        # If unlocked, aggregate questions from ALL module lessons
+        # Each lesson usually has a quiz. Find all quizzes for these lessons.
+        import random
+        
+        lesson_questions = []
+        for lid in lesson_ids:
+            # Find quizzes for this specific lesson
+            quizzes = Quiz.objects.filter(lesson_id=lid)
+            lesson_qs_pool = list(Question.objects.filter(quiz_id__in=quizzes.values_list("id", flat=True)))
+            if lesson_qs_pool:
+                random.shuffle(lesson_qs_pool)
+                # Take up to 3 questions from each lesson to ensure variety
+                lesson_questions.extend(lesson_qs_pool[:3])
+        
+        # If we still have room, add more random questions from the module
+        if len(lesson_questions) < 20:
+            remaining_ids = Question.objects.filter(
+                quiz_id__in=Quiz.objects.filter(lesson_id__in=lesson_ids).values_list("id", flat=True)
+            ).exclude(id__in=[q.id for q in lesson_questions]).values_list("id", flat=True)
+            
+            extra_ids = random.sample(list(remaining_ids), min(len(remaining_ids), 20 - len(lesson_questions)))
+            lesson_questions.extend(list(Question.objects.filter(id__in=extra_ids)))
+
+        random.shuffle(lesson_questions)
+        
+        # Serialize and return
+        final_questions = QuestionSerializer(lesson_questions[:30], many=True).data
+
+        return Response({
+            "id": f"module-quiz-{module.id}",
+            "title": f"{module.title} Comprehensive Quiz",
+            "locked": False,
+            "questions": final_questions,
+            "totalAvailable": Question.objects.filter(
+                quiz_id__in=Quiz.objects.filter(lesson_id__in=lesson_ids)
+            ).count()
+        })

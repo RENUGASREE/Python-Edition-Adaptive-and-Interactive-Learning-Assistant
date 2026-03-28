@@ -14,8 +14,9 @@ class User(AbstractUser):
 # --- Content Models (Mapped to existing tables) ---
 
 class Module(models.Model):
+    id = models.CharField(primary_key=True, max_length=100)
     title = models.TextField()
-    description = models.TextField()
+    description = models.TextField(blank=True, null=True)
     order = models.IntegerField(db_index=True)
     image_url = models.TextField(blank=True, null=True)
 
@@ -24,26 +25,29 @@ class Module(models.Model):
         ordering = ["order", "id"]
 
 class Lesson(models.Model):
-    module_id = models.IntegerField(db_index=True)
+    id = models.CharField(primary_key=True, max_length=255)
+    module_id = models.CharField(max_length=100, db_index=True)
     title = models.TextField()
     slug = models.TextField()
-    content = models.TextField()
+    content = models.TextField(blank=True, null=True)
     order = models.IntegerField(db_index=True)
     difficulty = models.TextField(blank=True, null=True)
-    duration = models.IntegerField()
+    duration = models.IntegerField(default=15)
 
     class Meta:
         db_table = 'lessons'
 
 class Quiz(models.Model):
-    lesson_id = models.IntegerField(db_index=True)
+    id = models.CharField(primary_key=True, max_length=255)
+    lesson_id = models.CharField(max_length=255, db_index=True, blank=True, null=True)
     title = models.TextField()
 
     class Meta:
         db_table = 'quizzes'
 
 class Question(models.Model):
-    quiz_id = models.IntegerField(db_index=True)
+    id = models.CharField(primary_key=True, max_length=255)
+    quiz_id = models.CharField(max_length=255, db_index=True)
     text = models.TextField()
     type = models.TextField(blank=True, null=True)
     options = models.JSONField()
@@ -53,7 +57,8 @@ class Question(models.Model):
         db_table = 'questions'
 
 class Challenge(models.Model):
-    lesson_id = models.IntegerField(db_index=True)
+    id = models.CharField(primary_key=True, max_length=255)
+    lesson_id = models.CharField(max_length=255, db_index=True)
     title = models.TextField()
     description = models.TextField()
     initial_code = models.TextField()
@@ -67,8 +72,10 @@ class Challenge(models.Model):
 
 class UserProgress(models.Model):
     user_id = models.TextField() # Points to UUID in users table (legacy)
-    lesson_id = models.IntegerField(db_index=True)
-    completed = models.BooleanField(blank=True, null=True)
+    lesson_id = models.CharField(max_length=255, db_index=True)
+    completed = models.BooleanField(default=False)
+    quiz_completed = models.BooleanField(default=False)
+    challenge_completed = models.BooleanField(default=False)
     score = models.IntegerField(blank=True, null=True)
     last_code = models.TextField(blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
@@ -105,20 +112,20 @@ class Progress(models.Model):
 
 class UserMastery(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    module_id = models.IntegerField()
+    module_id = models.CharField(max_length=100)
     mastery_score = models.FloatField(default=0)
     last_source = models.CharField(max_length=50, default="diagnostic")
     last_updated = models.DateTimeField(auto_now=True)
 
 class DiagnosticAttempt(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    quiz_id = models.IntegerField()
+    quiz_id = models.CharField(max_length=255)
     module_scores = models.JSONField(default=dict)
     overall_score = models.FloatField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
 class DiagnosticQuestionMeta(models.Model):
-    question_id = models.IntegerField(unique=True)
+    question_id = models.CharField(max_length=255, unique=True)
     module_tag = models.CharField(max_length=100)
     difficulty = models.CharField(max_length=50)
 

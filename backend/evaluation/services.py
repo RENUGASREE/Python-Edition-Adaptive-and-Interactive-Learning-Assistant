@@ -24,7 +24,7 @@ def get_or_assign_strategy(user: User) -> RecommendationStrategyAssignment:
     return assignment
 
 
-def log_recommendation_event(user: User, algorithm_name: str, recommended_lesson_id: int | None, recommended_topic: str | None, confidence: float):
+def log_recommendation_event(user: User, algorithm_name: str, recommended_lesson_id: str | None, recommended_topic: str | None, confidence: float):
     assignment = get_or_assign_strategy(user)
     event = RecommendationEvent.objects.create(
         user=user,
@@ -43,14 +43,14 @@ def log_recommendation_event(user: User, algorithm_name: str, recommended_lesson
     return event
 
 
-def _find_latest_event(user: User, lesson_id: int | None):
+def _find_latest_event(user: User, lesson_id: str | None):
     queryset = RecommendationEvent.objects.filter(user=user)
     if lesson_id is not None:
         queryset = queryset.filter(recommended_lesson_id=lesson_id)
     return queryset.order_by("-created_at").first()
 
 
-def mark_recommendation_accepted(user: User, lesson_id: int):
+def mark_recommendation_accepted(user: User, lesson_id: str):
     event = _find_latest_event(user, lesson_id)
     if not event:
         return None
@@ -64,7 +64,7 @@ def mark_recommendation_accepted(user: User, lesson_id: int):
     return outcome
 
 
-def mark_recommendation_completed(user: User, lesson_id: int, mastery_before: float | None, mastery_after: float | None):
+def mark_recommendation_completed(user: User, lesson_id: str, mastery_before: float | None, mastery_after: float | None):
     event = _find_latest_event(user, lesson_id)
     if not event:
         return None

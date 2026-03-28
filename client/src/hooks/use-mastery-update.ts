@@ -5,7 +5,7 @@ import { refreshAndRetry } from "@/lib/api-auth";
 export function useMasteryUpdate() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ moduleId, score, source, topic }: { moduleId: number; score: number; source: string; topic?: string | null }) => {
+    mutationFn: async ({ moduleId, score, source, topic }: { moduleId: string; score: number; source: string; topic?: string | null }) => {
       return refreshAndRetry<unknown>((token) =>
         fetch(apiUrl("/mastery/update"), {
           method: "POST",

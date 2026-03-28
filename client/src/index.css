@@ -72,13 +72,23 @@ pre[class*="language-"] {
   font-family: var(--font-code) !important;
 }
 
-.markdown-content h1 { @apply text-3xl font-bold mb-6 text-primary; }
-.markdown-content h2 { @apply text-2xl font-bold mb-4 mt-8 text-foreground; }
-.markdown-content h3 { @apply text-xl font-semibold mb-3 mt-6 text-foreground; }
-.markdown-content p { @apply mb-4 leading-relaxed text-muted-foreground; }
-.markdown-content ul { @apply list-disc list-inside mb-4 space-y-2 text-muted-foreground; }
-.markdown-content ol { @apply list-decimal list-inside mb-4 space-y-2 text-muted-foreground; }
-.markdown-content code { @apply bg-muted px-1.5 py-0.5 rounded text-accent font-mono text-sm; }
-.markdown-content pre { @apply bg-card p-4 rounded-xl overflow-x-auto mb-6 border border-border/50; }
-.markdown-content pre code { @apply bg-transparent p-0 text-foreground; }
-.markdown-content blockquote { @apply border-l-4 border-primary pl-4 italic text-muted-foreground my-6; }
+.markdown-content h1 { @apply text-4xl font-extrabold mb-8 text-primary tracking-tight; }
+.markdown-content h2 { @apply text-2xl font-bold mb-6 mt-12 text-foreground border-b border-border pb-2; }
+.markdown-content h3 { @apply text-xl font-bold mb-4 mt-8 text-foreground; }
+.markdown-content p { @apply mb-6 leading-relaxed text-muted-foreground text-lg; }
+.markdown-content ul { @apply list-disc list-outside mb-6 pl-6 space-y-3 text-muted-foreground; }
+.markdown-content ol { @apply list-decimal list-outside mb-6 pl-6 space-y-3 text-muted-foreground; }
+.markdown-content li { @apply pl-1; }
+.markdown-content code { @apply bg-muted/80 px-1.5 py-0.5 rounded text-accent font-mono text-sm border border-border/50; }
+.markdown-content pre { @apply bg-card/50 p-6 rounded-2xl overflow-x-auto mb-8 border border-border/50 shadow-inner; }
+.markdown-content pre code { @apply bg-transparent p-0 text-foreground border-none; }
+.markdown-content blockquote { @apply border-l-4 border-primary bg-primary/5 px-6 py-4 italic text-foreground my-8 rounded-r-xl; }
+.markdown-content hr { @apply my-12 border-t-2 border-muted/30; }
+.markdown-content strong { @apply text-foreground font-semibold; }
+
+/* Tables */
+.markdown-content table { @apply w-full mb-8 border-collapse overflow-hidden rounded-xl border border-border; }
+.markdown-content th { @apply bg-muted/50 text-left p-4 font-bold text-sm uppercase tracking-wider border-b border-border; }
+.markdown-content td { @apply p-4 text-sm border-b border-border text-muted-foreground; }
+.markdown-content tr:last-child td { @apply border-b-0; }
+.markdown-content tr:hover td { @apply bg-muted/20; }

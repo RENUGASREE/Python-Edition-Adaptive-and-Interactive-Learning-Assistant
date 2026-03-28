@@ -50,8 +50,8 @@ export default function Login() {
     try {
       const endpoint =
         mode === "login"
-          ? apiUrl("/auth/login")
-          : apiUrl("/auth/register");
+          ? apiUrl("/auth/login/")
+          : apiUrl("/auth/register/");
       const body =
         mode === "login"
           ? { identifier, password }

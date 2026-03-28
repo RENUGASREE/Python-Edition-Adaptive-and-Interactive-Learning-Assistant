@@ -1,6 +1,7 @@
 """Analytics computations for mastery, engagement, and risk signals."""
 import logging
 from datetime import datetime
+from django.utils.timezone import now, make_aware
 from django.db.models import Avg
 from core.models import User, UserProgress, QuizAttempt
 from assessments.models import AssessmentInteraction
@@ -26,10 +27,10 @@ def mastery_progression(user: User):
         module_attempts = QuizAttempt.objects.filter(
             user=user,
             notes__contains="module:"
-        ).order_by('created_at')
+        ).order_by('completed_at')
         for attempt in module_attempts:
             entries.append({
-                "created_at": attempt.created_at,
+                "created_at": attempt.completed_at,
                 "overall_score": attempt.score / 100.0,  # Convert percentage to 0-1
                 "source": "module"
             })
@@ -54,7 +55,7 @@ def mastery_progression(user: User):
                 # Use Monday of that week as timestamp
                 week_date = datetime.strptime(f"{year} {week} 1", "%Y %W %w")
                 entries.append({
-                    "created_at": week_date,
+                    "created_at": make_aware(week_date),
                     "overall_score": avg_score / 100.0,
                     "source": "lessons"
                 })
@@ -83,7 +84,7 @@ def mastery_progression(user: User):
                     # No entries at all - create from engagement or default
                     end_score = user.engagement_score or 0.5
                     start_date = user.date_joined
-                    end_date = datetime.now()
+                    end_date = now()
                 
                 # Ensure start < end in time
                 if start_date == end_date:

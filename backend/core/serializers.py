@@ -174,14 +174,27 @@ class UserSerializer(serializers.ModelSerializer):
 # --- Content Serializers ---
 
 class QuestionSerializer(serializers.ModelSerializer):
-    quizId = serializers.IntegerField(source='quiz_id')
+    id = serializers.CharField(read_only=True)
+    quizId = serializers.CharField(source='quiz_id')
 
     class Meta:
         model = Question
         fields = ('id', 'quizId', 'text', 'type', 'options', 'points')
 
+    def to_representation(self, instance):
+        import random
+        ret = super().to_representation(instance)
+        options = ret.get('options')
+        if isinstance(options, list):
+            # Create a copy and shuffle it
+            shuffled_options = list(options)
+            random.shuffle(shuffled_options)
+            ret['options'] = shuffled_options
+        return ret
+
 class QuizSerializer(serializers.ModelSerializer):
-    lessonId = serializers.IntegerField(source='lesson_id')
+    id = serializers.CharField(read_only=True)
+    lessonId = serializers.CharField(source='lesson_id')
     questions = serializers.SerializerMethodField()
 
     class Meta:
@@ -193,7 +206,8 @@ class QuizSerializer(serializers.ModelSerializer):
         return QuestionSerializer(questions, many=True).data
 
 class ChallengeSerializer(serializers.ModelSerializer):
-    lessonId = serializers.IntegerField(source='lesson_id')
+    id = serializers.IntegerField(read_only=True) # Table challenges uses serial ID
+    lessonId = serializers.CharField(source='lesson_id')
     initialCode = serializers.CharField(source='initial_code')
     solutionCode = serializers.CharField(source='solution_code', required=False)
     testCases = serializers.JSONField(source='test_cases')
@@ -204,6 +218,7 @@ class ChallengeSerializer(serializers.ModelSerializer):
 
 # Forward declaration or separate serializer to avoid circular dependency
 class SimpleModuleSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(read_only=True)
     imageUrl = serializers.CharField(source='image_url', required=False)
     
     class Meta:
@@ -211,16 +226,20 @@ class SimpleModuleSerializer(serializers.ModelSerializer):
         fields = ('id', 'title', 'description', 'order', 'imageUrl')
 
 class LessonSerializer(serializers.ModelSerializer):
-    moduleId = serializers.IntegerField(source='module_id')
+    id = serializers.CharField(read_only=True)
+    moduleId = serializers.CharField(source='module_id')
     quizzes = serializers.SerializerMethodField()
     challenges = serializers.SerializerMethodField()
     module = serializers.SerializerMethodField() 
     unlocked = serializers.SerializerMethodField()
     completed = serializers.SerializerMethodField()
 
+    nextLessonId = serializers.SerializerMethodField()
+    previousLessonId = serializers.SerializerMethodField()
+
     class Meta:
         model = Lesson
-        fields = ('id', 'moduleId', 'title', 'slug', 'content', 'order', 'difficulty', 'duration', 'quizzes', 'challenges', 'module', 'unlocked', 'completed')
+        fields = ('id', 'moduleId', 'title', 'slug', 'content', 'order', 'difficulty', 'duration', 'quizzes', 'challenges', 'module', 'unlocked', 'completed', 'nextLessonId', 'previousLessonId')
 
     def get_unlocked(self, obj):
         request = self.context.get("request")
@@ -238,6 +257,38 @@ class LessonSerializer(serializers.ModelSerializer):
         user_id = _progress_user_id(request.user)
         return UserProgress.objects.filter(user_id=user_id, lesson_id=obj.id, completed=True).exists()
 
+    def get_nextLessonId(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        from .views import _lesson_ids_for_user_module
+        allowed_ids = _lesson_ids_for_user_module(request.user, obj.module_id)
+        # ordered_lessons = list(Lesson.objects.filter(id__in=allowed_ids).order_by("order", "id"))
+        # Using a list comprehension to preserve order from allowed_ids if it's already sorted
+        # but _lesson_ids_for_user_module might not guarantee 'order' field sorting.
+        # Actually, let's just use the IDs in sequence as determined by the adaptive logic.
+        try:
+            curr_idx = allowed_ids.index(obj.id)
+            if curr_idx < len(allowed_ids) - 1:
+                return allowed_ids[curr_idx + 1]
+        except (ValueError, IndexError):
+            pass
+        return None
+
+    def get_previousLessonId(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        from .views import _lesson_ids_for_user_module
+        allowed_ids = _lesson_ids_for_user_module(request.user, obj.module_id)
+        try:
+            curr_idx = allowed_ids.index(obj.id)
+            if curr_idx > 0:
+                return allowed_ids[curr_idx - 1]
+        except (ValueError, IndexError):
+            pass
+        return None
+
     def get_quizzes(self, obj):
         request = self.context.get("request")
         user = request.user if request and request.user.is_authenticated else None
@@ -248,11 +299,11 @@ class LessonSerializer(serializers.ModelSerializer):
             from .services.ai_quiz_generator import generate_quiz_from_lesson
             dynamic_questions = generate_quiz_from_lesson(obj)
             return [{
-                "id": -obj.id, # Negative ID to distinguish from real DB quizzes
+                "id": f"dynamic-quiz-{obj.id}", # String ID for fallback
                 "title": f"Lesson Checkpoint: {obj.title}",
                 "questions": [
                     {
-                        "id": -(obj.id * 100 + idx),
+                        "id": f"dynamic-ques-{obj.id}-{idx}", # String ID for fallback
                         "text": q["question"],
                         "options": [
                             {
@@ -297,7 +348,7 @@ class LessonSerializer(serializers.ModelSerializer):
         return SimpleModuleSerializer(module).data if module else None
 
 class SimpleLessonSerializer(serializers.ModelSerializer):
-    moduleId = serializers.IntegerField(source='module_id')
+    moduleId = serializers.CharField(source='module_id')
     topic = serializers.SerializerMethodField()
     prerequisites = serializers.SerializerMethodField()
     embeddingVector = serializers.SerializerMethodField()
@@ -324,12 +375,34 @@ class SimpleLessonSerializer(serializers.ModelSerializer):
 class ModuleSerializer(serializers.ModelSerializer):
     imageUrl = serializers.CharField(source='image_url', required=False)
     lessons = serializers.SerializerMethodField()
+    quizLocked = serializers.SerializerMethodField()
+    quizCompleted = serializers.SerializerMethodField()
 
     class Meta:
         model = Module
-        fields = ('id', 'title', 'description', 'order', 'imageUrl', 'lessons')
+        fields = ('id', 'title', 'description', 'order', 'imageUrl', 'lessons', 'quizLocked', 'quizCompleted')
+
+    def get_quizLocked(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return True
+        from .views import _module_completed
+        return not _module_completed(request.user, obj.id)
+
+    def get_quizCompleted(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        # Check if any quiz attempt exists for this module
+        # Attempts currently store "module:{id}:level:{level}" in notes
+        from .models import QuizAttempt
+        return QuizAttempt.objects.filter(
+            user=request.user, 
+            notes__icontains=f"module:{obj.id}:level:"
+        ).exists()
 
     def get_lessons(self, obj):
+        # ... (keep existing implementation)
         request = self.context.get("request")
         user = request.user if request else None
         if not user or not user.is_authenticated:
@@ -374,20 +447,10 @@ class ModuleSerializer(serializers.ModelSerializer):
         
         unlocked = []
         for idx, lesson in enumerate(lessons):
-            is_unlocked = True
-            prereqs = prereq_map.get(lesson.id, [])
-            if prereqs:
-                for pre_id in prereqs:
-                    if pre_id not in completed_ids:
-                        is_unlocked = False
-                        break
-
-            # Ensure sequential unlock: next lesson unlocked only when previous is completed
-            if idx > 0 and not completed_ids.__contains__(lessons[idx - 1].id):
-                is_unlocked = False
-
+            from .views import _lesson_unlocked
+            is_unlocked = _lesson_unlocked(user, lesson)
+            
             # Use SimpleLessonSerializer if LessonSerializer causes circular issues
-            # For now, ensuring LessonSerializer is available
             data = LessonSerializer(lesson, context=self.context).data
             data["unlocked"] = is_unlocked
             data["completed"] = lesson.id in completed_ids
@@ -398,13 +461,16 @@ class ModuleSerializer(serializers.ModelSerializer):
 
 class UserProgressSerializer(serializers.ModelSerializer):
     userId = serializers.CharField(source='user_id', read_only=False)
-    lessonId = serializers.IntegerField(source='lesson_id')
+    lessonId = serializers.CharField(source='lesson_id')
     lastCode = serializers.CharField(source='last_code', required=False, allow_blank=True)
     completedAt = serializers.DateTimeField(source='completed_at', required=False, allow_null=True)
 
+    quizCompleted = serializers.BooleanField(source='quiz_completed', required=False, allow_null=True)
+    challengeCompleted = serializers.BooleanField(source='challenge_completed', required=False, allow_null=True)
+
     class Meta:
         model = UserProgress
-        fields = ('id', 'userId', 'lessonId', 'completed', 'score', 'lastCode', 'completedAt')
+        fields = ('id', 'userId', 'lessonId', 'completed', 'quizCompleted', 'challengeCompleted', 'score', 'lastCode', 'completedAt')
     
     def create(self, validated_data):
         # Remove userId if present and use the one from the request
