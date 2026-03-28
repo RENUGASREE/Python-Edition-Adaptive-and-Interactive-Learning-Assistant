@@ -291,20 +291,63 @@ def _normalize_track(level: str | None) -> str:
     return "Beginner"
 
 
+# Mapping from recommendation canonical topics -> diagnostic quiz module keys.
+# Needed because the quiz stores scores as "mod_variables_types" but the
+# recommendation engine uses "variables" as the canonical topic name.
+_CANONICAL_TO_MODULE_KEYS = {
+    "variables":       ["mod_variables_types", "variables_types", "variables"],
+    "conditions":      ["mod_control_flow", "control_flow", "conditions"],
+    "loops":           ["mod_loops_iteration", "loops_iteration", "loops"],
+    "functions":       ["mod_functions_scope", "functions_scope", "functions"],
+    "data_structures": ["mod_data_structures", "data_structures"],
+    "oop":             ["mod_oop", "oop"],
+    # Extended modules that may appear in the quiz
+    "introduction":    ["mod_introduction", "introduction"],
+    "file_handling":   ["mod_file_handling", "file_handling"],
+    "error_handling":  ["mod_error_handling", "error_handling"],
+    "advanced_python": ["mod_advanced_python", "advanced_python"],
+    "real_world_projects": ["mod_real_world_projects", "real_world_projects"],
+}
+
+
 def _get_module_difficulty(user: User, topic: str) -> str:
     """
-    Return the per-module difficulty tier stored in the user's mastery_vector
-    after the placement quiz.  Falls back to the global user.level.
-
-    Stored under mastery_vector['_module_difficulty'][<canon_topic>].
+    Return the per-module difficulty tier stored in mastery_vector after the
+    placement quiz.  Resolution order:
+      1. Exact match on canonical topic key
+      2. Known alias lookup via _CANONICAL_TO_MODULE_KEYS
+      3. Substring search (e.g. 'loops' inside 'mod_loops_iteration')
+      4. Global fallback: user.level
     """
     mastery_vector = user.mastery_vector or {}
     module_difficulty_map = mastery_vector.get("_module_difficulty") or {}
+
+    if not module_difficulty_map:
+        return _normalize_track(getattr(user, "level", None))
+
     canon = normalize_topic(topic)
+
+    # 1. Exact match
     tier = module_difficulty_map.get(canon)
-    if tier and tier in ("Pro", "Intermediate", "Beginner"):
+    if tier in ("Pro", "Intermediate", "Beginner"):
         return tier
-    # Fallback to global user level
+
+    # 2. Known alias mapping (canonical -> module keys)
+    for alias_key in _CANONICAL_TO_MODULE_KEYS.get(canon, []):
+        tier = module_difficulty_map.get(alias_key)
+        if tier in ("Pro", "Intermediate", "Beginner"):
+            return tier
+
+    # 3. Reverse alias: look for any stored key that maps back to canon
+    for stored_key, stored_tier in module_difficulty_map.items():
+        if stored_key.startswith("_"):   # skip internal keys
+            continue
+        # e.g. stored_key="mod_loops_iteration", canon="loops"
+        if canon in stored_key or stored_key in canon:
+            if stored_tier in ("Pro", "Intermediate", "Beginner"):
+                return stored_tier
+
+    # 4. Global fallback
     return _normalize_track(getattr(user, "level", None))
 
 
