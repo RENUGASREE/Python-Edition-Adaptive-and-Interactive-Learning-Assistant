@@ -1,79 +1,81 @@
-# Python Edition: Adaptive and Interactive Learning Assistant
+# Python Edition: Adaptive Learning Platform 🐍
 
-A comprehensive AI-powered, adaptive Python learning platform that personalizes the learning journey with intelligent recommendations, auto-graded coding challenges, RAG chatbot support, gamification, and exam integrity controls.
+A premium, AI-enhanced adaptive learning platform designed to take users from Python basics to professional mastery. The platform features a sophisticated recommendation engine, real-time code execution, and high-fidelity analytics.
+
+![Project Preview](https://via.placeholder.com/800x400/1e293b/ffffff?text=Python+Edition+Adaptive+Learning)
+
+---
 
 ## 🚀 Key Features
 
-- **Adaptive Learning** - Personalized recommendations based on learner profiling and knowledge tracing
-- **Interactive IDE** - Browser-based code editor with instant feedback
-- **Auto-Grader** - Sandbox-isolated code execution with unit test validation
-- **AI Chatbot** - Context-aware assistant for Python concepts and debugging help
-- **Gamification** - Badges, streaks, leaderboards, and certificates
-- **Progress Analytics** - Dashboard with learning metrics and mastery visualization
+### 🧠 Adaptive Learning Engine
+- **Diagnostic Placement**: A comprehensive 15-question quiz to assess baseline knowledge across 6 core modules.
+- **Mastery-Based Progression**: Intelligent backend logic that tracks proficiency (0.0 - 1.0) and unlocks content dynamically.
+- **Personalized Recommendations**: Automatic difficulty adjustment (Beginner, Intermediate, Pro) for every module based on user performance.
+
+### 📚 Professional Curriculum
+- **60 Deep-Dive Topics**: Covering everything from Variable Scope to Decorators and Context Managers.
+- **180+ Lessons**: Each topic contains progressive lessons (Objective, Concept, Example, Takeaway).
+- **Interactive Challenges**: 60 integrated coding challenges with an auto-grading sandbox.
+
+### 📊 Performance Analytics
+- **Topic Proficiency Radar**: Visual mastery breakdown across the curriculum.
+- **Real-time Progress Tracking**: Granular tracking of lesson completion and quiz scores.
+- **Mastery Vector Visualization**: Deep insights into the learner's knowledge profile.
+
+### 🛠️ Developer Suite
+- **Interactive IDE**: Integrated code editor with instant feedback and error diagnostics.
+- **RAG-Powered Chatbot**: AI assistant trained on the curriculum for context-aware help.
+
+---
 
 ## 🛠️ Tech Stack
 
-- Frontend: React + Vite (client at http://localhost:3002)
-- Backend: Django REST API (http://127.0.0.1:8000)
-- Database: PostgreSQL
-- Languages: TypeScript (frontend), Python (backend)
+- **Frontend**: React 18, Vite, Tailwind CSS, Framer Motion, Recharts.
+- **Backend**: Django 5.0, Django REST Framework, PostgreSQL.
+- **AI/ML**: OpenAI GPT-4o (via RAG) for intelligent tutoring.
+- **Execution**: Isolated sandbox for secure Python code evaluation.
+
+---
 
 ## 🏁 Quick Start
 
-### Prerequisites
-
+### 1. Prerequisites
 - Node.js 18+
 - Python 3.12+
-- PostgreSQL (running locally or hosted)
+- PostgreSQL
 
-### Installation
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/RENUGASREE/Python-Edition-Adaptive-and-Interactive-Learning-Assistant-.git
-    cd Python-Edition-Adaptive-and-Interactive-Learning-Assistant-
-    ```
-
-2.  **Install frontend dependencies:**
-    ```bash
-    npm install
-    ```
-
-3.  **Backend setup (Django):**
-    ```bash
-    cd backend
-    pip install -r requirements.txt
-    python manage.py migrate
-    python manage.py runserver
-    ```
-    The API runs at http://127.0.0.1:8000
-
-4.  **Run frontend (Vite):**
-    ```bash
-    npx vite --port 3002
-    ```
-    Open http://localhost:3002 in your browser.
-
-### Notes
-- Registration requires a strong password (min 8 chars, uppercase, lowercase, number, special char).
-- If you see 401 Unauthorized on `/api/auth/user`, it means you’re not logged in yet; this is expected before login/registration.
-
-## 📦 Build for Production
-
-Build the frontend:
-
+### 2. Backend Setup
 ```bash
-npm run build
+cd backend
+python -m venv .venv
+# Activate venv: .\.venv\Scripts\activate (Windows) or source .venv/bin/activate (Mac/Linux)
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
 ```
-Start the Node server (optional, if using the Node API):
-To start the production server:
+*API runs at http://127.0.0.1:8000*
 
+### 3. Frontend Setup
 ```bash
-npm start
-## ☁️ Deployment
-- Django API can be deployed to platforms supporting Python (Render, Railway).
-- Frontend can be deployed to static hosts (Vercel, Netlify) or served by Node.
-3.  Set the Start Command to: `npm start`
-4.  Add your `DATABASE_URL` environment variable.
+cd client
+npm install
+npm run dev -- --port 3002
+```
+*Frontend runs at http://localhost:3002*
+
+---
+
+## 📦 Project Structure
+- `backend/`: Django core, adaptive logic, and curriculum data.
+- `client/`: React application, UI components, and state management.
+- `assessments/`: Data models for quizzes and placement tests.
+- `evaluation/`: Logic for the adaptive recommendation engine.
+
+---
 
 ## 🤝 Contributing
+Contributions are welcome! Please read the `CONTRIBUTING.md` for our code of conduct and the process for submitting pull requests.
+
+## 📄 License
+This project is licensed under the MIT License - see the `LICENSE` file for details.

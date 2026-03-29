@@ -63,14 +63,32 @@ export default function Curriculum() {
 
   const moduleLevels = useMemo(() => {
     const levels: Record<string, string> = {};
+    
+    // 1. Primary source: masteryVector._module_difficulty (updated by placement quiz)
+    const mvDiffs = (user?.masteryVector as any)?._module_difficulty || {};
+    Object.entries(mvDiffs).forEach(([key, val]) => {
+      levels[key] = val as string;
+      // Also map underscored keys to dashed module IDs
+      if (key.includes("_")) {
+        levels[key.replace(/_/g, "-")] = val as string;
+      }
+    });
+
+    // Special case: mod-introduction / mod_introduction maps to mod-python-basics
+    if (levels["mod-introduction"] || levels["mod_introduction"]) {
+      levels["mod-python-basics"] = levels["mod-introduction"] || levels["mod_introduction"];
+    }
+
+    // 2. Secondary source: Legacy quizAttempts notes
     (quizAttempts || []).forEach((attempt: any) => {
       const parsed = parseModuleLevel(attempt?.notes);
       if (parsed && parsed.moduleId) {
         levels[parsed.moduleId] = parsed.level;
       }
     });
+    
     return levels;
-  }, [quizAttempts]);
+  }, [quizAttempts, user?.masteryVector]);
 
   const allLessons = useMemo(() => {
     if (!modules) return [];
