@@ -241,6 +241,10 @@ export default function PlacementQuiz() {
       const data = await res.json();
       await queryClient.invalidateQueries({ queryKey: ["/api/metrics"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/modules"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/recommendations"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/recommend-next"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
       
       if (violationCount >= 3) {
         setViolationDialog(true);
@@ -251,9 +255,33 @@ export default function PlacementQuiz() {
           description: `Score: ${Math.round((data?.weightedScore || data?.overallScore || 0) * 100)}%`,
         });
         setExpired(true);
-        // Ensure user data is refetched so firstLessonId can be calculated
-        await queryClient.refetchQueries({ queryKey: ["/api/auth/user"] });
-        setTimeout(() => setLocation("/dashboard"), 2000);
+        // Ensure user + modules are refetched so subsequent pages pick the correct track immediately
+        queryClient.removeQueries({ queryKey: ["/api/modules"] }); // CLEAR cache completely
+        queryClient.removeQueries({ queryKey: ["/api/auth/user"] }); // CLEAR user cache
+        
+        // Fetch fresh data directly
+        const accessToken = getAccessToken();
+        const [userRes, modulesRes] = await Promise.all([
+          fetch(apiUrl("/auth/user"), { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}, credentials: "include" }),
+          fetch(apiUrl("/api/modules/"), { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}, credentials: "include" }),
+        ]);
+        
+        const freshUser = userRes.ok ? await userRes.json() : null;
+        const freshModules = modulesRes.ok ? await modulesRes.json() : [];
+        
+        // Update cache with fresh data
+        queryClient.setQueryData(["/api/auth/user"], freshUser);
+        queryClient.setQueryData(["/api/modules"], freshModules);
+        
+        // Get correct first lesson ID from fresh data
+        const freshLessons = freshModules?.flatMap((m: any) => (m.lessons || []).map((l: any) => ({ ...l, moduleOrder: m.order }))) || [];
+        freshLessons.sort((a: any, b: any) => {
+          if (a.moduleOrder !== b.moduleOrder) return a.moduleOrder - b.moduleOrder;
+          return (a.order || 0) - (b.order || 0);
+        });
+        const freshFirstLessonId = freshLessons[0]?.id;
+        
+        setTimeout(() => setLocation(freshFirstLessonId ? `/lesson/${freshFirstLessonId}` : "/dashboard"), 2000);
       }
     } catch (err: any) {
       setError(err.message || "Failed to submit diagnostic quiz");

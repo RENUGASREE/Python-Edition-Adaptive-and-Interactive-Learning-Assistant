@@ -72,7 +72,7 @@ export function useAuth() {
     queryKey: ["/api/auth/user"],
     queryFn: fetchUser,
     retry: false,
-    staleTime: 30 * 1000,
+    staleTime: 0, // Always check for fresh user data (important after quiz)
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });

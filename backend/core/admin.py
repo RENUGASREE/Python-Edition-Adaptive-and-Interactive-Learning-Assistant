@@ -14,6 +14,8 @@ class CustomUserAdmin(UserAdmin):
     )
     search_fields = ('username', 'email')
     ordering = ('username',)
+    actions_on_top = False
+    actions_on_bottom = True
 
 @admin.register(Progress)
 class ProgressAdmin(admin.ModelAdmin):
@@ -21,6 +23,8 @@ class ProgressAdmin(admin.ModelAdmin):
     list_filter = ('topic', 'mastery')
     search_fields = ('user__username', 'topic')
     raw_id_fields = ('user',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('user', 'topic')}),
         ('Details', {'fields': ('mastery', 'last_updated')}),
@@ -46,6 +50,8 @@ class BadgeAdmin(admin.ModelAdmin):
     list_display = ('name', 'description')
     list_filter = ('name',)
     search_fields = ('name', 'description')
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('name', 'description')}),
     )
@@ -56,6 +62,8 @@ class CertificateAdmin(admin.ModelAdmin):
     list_filter = ('module', 'issued_at')
     search_fields = ('user__username', 'module')
     raw_id_fields = ('user',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('user', 'module')}),
         ('Details', {'fields': ('pdf_path', 'issued_at')}),
@@ -68,6 +76,8 @@ class RecommendationAdmin(admin.ModelAdmin):
     list_filter = ('created_at',)
     search_fields = ('user__username', 'content')
     raw_id_fields = ('user',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('user', 'content')}),
         ('Timestamps', {'fields': ('created_at',)}),
@@ -80,6 +90,8 @@ class ChatMessageAdmin(admin.ModelAdmin):
     list_filter = ('timestamp',)
     search_fields = ('user__username', 'message')
     raw_id_fields = ('user',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('user', 'message')}),
         ('Timestamps', {'fields': ('timestamp',)}),
@@ -91,6 +103,8 @@ class ModuleAdmin(admin.ModelAdmin):
     list_display = ('title', 'order')
     list_filter = ('order',)
     search_fields = ('title',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('title', 'description', 'order', 'image_url')}),
     )
@@ -100,6 +114,8 @@ class LessonAdmin(admin.ModelAdmin):
     list_display = ('title', 'module_id', 'order', 'difficulty')
     list_filter = ('module_id', 'difficulty')
     search_fields = ('title', 'slug')
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('module_id', 'title', 'slug', 'content')}),
         ('Metadata', {'fields': ('order', 'difficulty', 'duration')}),
@@ -110,6 +126,8 @@ class QuizAdmin(admin.ModelAdmin):
     list_display = ('title', 'lesson_id')
     list_filter = ('lesson_id',)
     search_fields = ('title',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('lesson_id', 'title')}),
     )
@@ -119,6 +137,8 @@ class QuestionAdmin(admin.ModelAdmin):
     list_display = ('text', 'quiz_id', 'points')
     list_filter = ('quiz_id',)
     search_fields = ('text',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('quiz_id', 'text', 'type', 'options', 'points')}),
     )
@@ -128,6 +148,8 @@ class ChallengeAdmin(admin.ModelAdmin):
     list_display = ('title', 'lesson_id', 'points')
     list_filter = ('lesson_id',)
     search_fields = ('title',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('lesson_id', 'title', 'description')}),
         ('Code', {'fields': ('initial_code', 'solution_code', 'test_cases', 'points')}),
@@ -139,6 +161,8 @@ class UserMasteryAdmin(admin.ModelAdmin):
     list_filter = ('module_id', 'last_source')
     search_fields = ('user__username',)
     raw_id_fields = ('user',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('user', 'module_id', 'mastery_score', 'last_source')}),
     )
@@ -149,6 +173,8 @@ class DiagnosticAttemptAdmin(admin.ModelAdmin):
     list_filter = ('quiz_id', 'created_at', 'user')
     search_fields = ('user__username',)
     raw_id_fields = ('user',)
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('user', 'quiz_id', 'overall_score', 'module_scores')}),
         ('Timestamps', {'fields': ('created_at',)}),
@@ -165,6 +191,8 @@ class DiagnosticQuestionMetaAdmin(admin.ModelAdmin):
     list_display = ('question_id', 'module_tag', 'difficulty')
     list_filter = ('module_tag', 'difficulty')
     search_fields = ('question_id', 'module_tag')
+    actions_on_top = False
+    actions_on_bottom = True
     fieldsets = (
         (None, {'fields': ('question_id', 'module_tag', 'difficulty')}),
     )
@@ -173,3 +201,6 @@ class DiagnosticQuestionMetaAdmin(admin.ModelAdmin):
 class CertificateTemplateAdmin(admin.ModelAdmin):
     list_display = ('code', 'title')
     search_fields = ('code', 'title')
+    actions_on_top = False
+    actions_on_bottom = True
+

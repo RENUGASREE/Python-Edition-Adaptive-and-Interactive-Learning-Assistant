@@ -2,7 +2,6 @@
 
 A premium, AI-enhanced adaptive learning platform designed to take users from Python basics to professional mastery. The platform features a sophisticated recommendation engine, real-time code execution, and high-fidelity analytics.
 
-![Project Preview](https://via.placeholder.com/800x400/1e293b/ffffff?text=Python+Edition+Adaptive+Learning)
 
 ---
 

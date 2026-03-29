@@ -6,7 +6,7 @@ export interface User {
   lastName?: string;
   has_taken_quiz: boolean;
   diagnostic_completed: boolean;
-  mastery_vector: Record<string, number>;
+  masteryVector: Record<string, any>;
   engagement_score: number;
   level?: string;
 }
@@ -16,6 +16,9 @@ export interface Module {
   title: string;
   description: string;
   order: number;
+  imageUrl?: string;
+  quizLocked?: boolean;
+  quizCompleted?: boolean;
 }
 
 export interface Lesson {

@@ -3,6 +3,7 @@ import os
 import logging
 from django.core.cache import cache
 from django.utils import timezone
+from django.db.models import Subquery, OuterRef
 from assessments.models import AssessmentInteraction
 from lessons.models import LessonProfile
 from core.models import Lesson, Module, User, UserProgress
@@ -250,24 +251,46 @@ def _rank_topics(user: User, scoring_fn):
     mastery_vector = {normalize_topic(k): float(v) for k, v in (user.mastery_vector or {}).items() if not k.startswith("_")}
     engagement = user.engagement_score or 0.5
     
-    # We must only rank topics whose difficulty matches the user's assigned module difficulty.
+    # Optimization: Pre-calculate module difficulties to avoid expensive calls inside the loop
+    mastery_vector = user.mastery_vector or {}
+    difficulty_map = mastery_vector.get("_module_difficulty", {})
+    global_fallback = _normalize_track(getattr(user, "level", "Beginner"))
+    
+    # Pre-resolve difficulty for all modules to avoid repetitive logic
+    unique_module_ids = Lesson.objects.values_list("module_id", flat=True).distinct()
+    resolved_diffs = {}
+    for mod_id in unique_module_ids:
+        # Instead of calling _get_module_difficulty inside loop, we do a simplified version here
+        # that handles the most common case found in ModuleSerializer logic
+        mod_id_str = str(mod_id)
+        search_keys = [mod_id_str, mod_id_str.replace("-", "_")]
+        if mod_id_str == "mod-python-basics":
+            search_keys.extend(["mod_introduction", "mod-introduction"])
+        
+        tier = None
+        for sk in search_keys:
+            if sk in difficulty_map:
+                tier = difficulty_map[sk]
+                break
+        resolved_diffs[mod_id_str] = tier or global_fallback
+
+    # Use a single query to get profiles and matching lesson difficulties
+    # This replaces the Python-level loop over all records
+    profiles_with_lessons = LessonProfile.objects.annotate(
+        lesson_difficulty=Subquery(
+            Lesson.objects.filter(id=OuterRef('lesson_id')).values('difficulty')[:1]
+        ),
+        module_id=Subquery(
+            Lesson.objects.filter(id=OuterRef('lesson_id')).values('module_id')[:1]
+        )
+    ).values("topic", "lesson_difficulty", "module_id")
+
     valid_topics = []
-    profiles = list(LessonProfile.objects.all())
-    lesson_ids = [str(p.lesson_id) for p in profiles if p.lesson_id]
-    
-    # Get the module map for these lesson IDs
-    lessons = Lesson.objects.filter(id__in=lesson_ids).values("id", "module_id")
-    module_by_lesson_id = {str(l["id"]): l["module_id"] for l in lessons}
-    
-    for profile in profiles:
-        mod_id = module_by_lesson_id.get(str(profile.lesson_id))
-        if not mod_id:
-            continue
-        # What is the user's assigned difficulty for this specific module?
-        target_diff = _get_module_difficulty(user, mod_id)
-        # Only consider this topic if its difficulty matches the assigned tier
-        if profile.difficulty == target_diff:
-            valid_topics.append(profile.topic)
+    for p in profiles_with_lessons:
+        mod_id = str(p.get("module_id", ""))
+        target_diff = resolved_diffs.get(mod_id, global_fallback)
+        if p.get("lesson_difficulty") == target_diff:
+            valid_topics.append(p["topic"])
 
     topics = set(valid_topics)
     if not topics:
@@ -304,8 +327,8 @@ def _progress_user_id(user: User) -> str:
 
 def _normalize_track(level: str | None) -> str:
     lower = (level or "").strip().lower()
-    if lower == "pro":
-        return "Pro"
+    if lower == "pro" or lower == "advanced":
+        return "Pro"  # Database uses "Pro"
     if lower == "intermediate":
         return "Intermediate"
     return "Beginner"
@@ -367,13 +390,13 @@ def _get_module_difficulty(user: User, topic: str) -> str:
     # 1. Exact match
     tier = module_difficulty_map.get(canon)
     if tier in ("Pro", "Intermediate", "Beginner"):
-        return tier
+        return _normalize_track(tier)
 
     # 2. Known alias mapping (canonical -> module keys)
     for alias_key in _CANONICAL_TO_MODULE_KEYS.get(canon, []):
         tier = module_difficulty_map.get(alias_key)
         if tier in ("Pro", "Intermediate", "Beginner"):
-            return tier
+            return _normalize_track(tier)
 
     # 3. Reverse alias: look for any stored key that maps back to canon
     for stored_key, stored_tier in module_difficulty_map.items():
@@ -382,7 +405,7 @@ def _get_module_difficulty(user: User, topic: str) -> str:
         # e.g. stored_key="mod_loops_iteration", canon="loops"
         if canon in stored_key or stored_key in canon:
             if stored_tier in ("Pro", "Intermediate", "Beginner"):
-                return stored_tier
+                return _normalize_track(stored_tier)
 
     # 4. Global fallback
     return _normalize_track(getattr(user, "level", None))

@@ -13,20 +13,27 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiUrl, getAccessToken } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
 export default function Curriculum() {
+  const queryClient = useQueryClient();
   const { data: modules, isLoading: loadingModules, error: modulesError, refetch: refetchModules } = useModules();
   const { data: progress, isLoading: loadingProgress } = useUserProgress();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  
+  // CRITICAL: Force refetch user data on mount to ensure fresh masteryVector after quiz
+  useEffect(() => {
+    queryClient.refetchQueries({ queryKey: ["/api/auth/user"], exact: true });
+    refetchModules();
+  }, [queryClient, refetchModules]);
   const [lockedAlert, setLockedAlert] = useState<{ open: boolean; title: string; type: 'module' | 'lesson' | 'placement' | 'moduleQuiz' }>({
     open: false,
     title: "",
@@ -57,7 +64,7 @@ export default function Curriculum() {
   const normalizeLevel = (level?: string | null) => {
     if (!level) return "beginner";
     const lower = level.toLowerCase();
-    if (lower === "advanced") return "pro";
+    if (lower === "advanced" || lower === "pro") return "pro";
     return lower;
   };
 
@@ -209,7 +216,7 @@ export default function Curriculum() {
     return !isLessonCompleted(previousLesson.id);
   };
 
-  const handleLockedClick = (title: string, type: 'module' | 'lesson' | 'placement') => {
+  const handleLockedClick = (title: string, type: 'module' | 'lesson' | 'placement' | 'moduleQuiz') => {
     setLockedAlert({ open: true, title, type });
   };
 

@@ -40,55 +40,38 @@ export function AdaptiveProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAuth();
   const hasCompletedQuiz = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
 
-  const { data: recommendation, isLoading: loadingRecommendation } = useQuery({
-    queryKey: ["/api/recommend-next"],
+  // Batch fetch all adaptive data in parallel for better performance
+  const { data: adaptiveData, isLoading: loadingAdaptive } = useQuery({
+    queryKey: ["/api/adaptive-data"],
     queryFn: async () => {
       const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/recommend-next/"), {
-        credentials: "include",
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-      });
-      if (!res.ok) throw new Error("Failed to fetch recommendation");
-      return res.json();
+      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+      
+      const [recommendationRes, analyticsRes, metricsRes] = await Promise.all([
+        fetch(apiUrl("/recommend-next/"), { credentials: "include", headers }),
+        fetch(apiUrl("/analytics/"), { credentials: "include", headers }),
+        fetch(apiUrl("/metrics/"), { credentials: "include", headers }),
+      ]);
+      
+      const [recommendation, analytics, metrics] = await Promise.all([
+        recommendationRes.ok ? recommendationRes.json() : null,
+        analyticsRes.ok ? analyticsRes.json() : null,
+        metricsRes.ok ? metricsRes.json() : null,
+      ]);
+      
+      return { recommendation, analytics, metrics };
     },
     enabled: isAuthenticated && hasCompletedQuiz,
-  });
-
-  const { data: analytics, isLoading: loadingAnalytics } = useQuery({
-    queryKey: ["/api/analytics"],
-    queryFn: async () => {
-      const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/analytics/"), {
-        credentials: "include",
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-      });
-      if (!res.ok) throw new Error("Failed to fetch analytics");
-      return res.json();
-    },
-    enabled: isAuthenticated && hasCompletedQuiz,
-  });
-
-  const { data: metrics, isLoading: loadingMetrics } = useQuery({
-    queryKey: ["/api/metrics"],
-    queryFn: async () => {
-      const accessToken = getAccessToken();
-      const res = await fetch(apiUrl("/metrics/"), {
-        credentials: "include",
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-      });
-      if (!res.ok) throw new Error("Failed to fetch metrics");
-      return res.json();
-    },
-    enabled: isAuthenticated && hasCompletedQuiz,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   return (
     <AdaptiveContext.Provider
       value={{
-        recommendation,
-        analytics,
-        masteryVector: metrics?.masteryVector,
-        isLoading: loadingRecommendation || loadingAnalytics || loadingMetrics,
+        recommendation: adaptiveData?.recommendation,
+        analytics: adaptiveData?.analytics,
+        masteryVector: adaptiveData?.metrics?.masteryVector,
+        isLoading: loadingAdaptive,
       }}
     >
       {children}

@@ -42,14 +42,14 @@ def normalize_level_for_score(score):
         return "Beginner"
     if s < 80:
         return "Intermediate"
-    return "Advanced"
+    return "Pro"
 
 def map_level_to_db(level):
     if not level:
         return "Beginner"
     lower = level.strip().lower()
-    if lower in ["advanced", "pro"]:
-        return "Pro"
+    if lower in ["pro", "advanced"]:
+        return "Pro"  # Database stores as "Pro"
     if lower == "intermediate":
         return "Intermediate"
     return "Beginner"
@@ -74,10 +74,20 @@ def update_user_mastery(user, module_id, score, source, topic=None):
             last_source=source,
         )
     mastery_vector = user.mastery_vector or {}
+    module_difficulty_map = mastery_vector.get("_module_difficulty", {})
+    
+    difficulty_label = normalize_level_for_score(new_score * 100)
+
     if topic:
         mastery_vector[topic] = new_score
     else:
-        mastery_vector[str(module_id)] = new_score
+        module_key = str(module_id)
+        mastery_vector[module_key] = new_score
+        # Also update _module_difficulty map for consistency across adaptive systems
+        module_difficulty_map[module_key] = difficulty_label
+        module_difficulty_map[module_key.replace("-", "_")] = difficulty_label
+        
+    mastery_vector["_module_difficulty"] = module_difficulty_map
     user.mastery_vector = mastery_vector
     user.save(update_fields=["mastery_vector"])
     if topic:
@@ -146,19 +156,20 @@ def _module_level_map(user):
             levels[int(match.group(1))] = match.group(2)
             
     # 3. Handle special diagnostic module name mappings
-    if "mod_introduction" in difficulty_map:
-        levels["mod-python-basics"] = difficulty_map["mod_introduction"]
-    if "mod_variables_types" in difficulty_map:
-        levels["mod-variables-types"] = difficulty_map["mod_variables_types"]
+    intro_val = difficulty_map.get("mod_introduction") or difficulty_map.get("mod-introduction")
+    if intro_val:
+        levels["mod-python-basics"] = intro_val
+        
+    var_val = difficulty_map.get("mod_variables_types") or difficulty_map.get("mod-variables-types")
+    if var_val:
+        levels["mod-variables-types"] = var_val
 
     return levels
 
 def _normalize_level(level):
-    if not level:
-        return "Beginner"
-    lower = level.strip().lower()
-    if lower == "advanced":
-        return "Pro"
+    lower = (level or "").strip().lower()
+    if lower == "pro" or lower == "advanced":
+        return "Pro"  # Database uses "Pro"
     if lower == "intermediate":
         return "Intermediate"
     return "Beginner"
@@ -185,13 +196,21 @@ def _lesson_ids_for_user_module(user, module_id):
         # Determine the target level for this specific topic/module
         # Priority: _module_difficulty entry -> Topic Score -> Module Score -> User Global Level
         
+        # Support both dashed and underscored module IDs for robustness
         assigned_difficulty = None
-        # Try to find assigned difficulty in the map
-        # Normalize keys for matching (e.g. mod-python-basics -> mod_python_basics)
-        search_keys = [topic, str(module_id), str(module_id).replace("-", "_")]
-        # Special case: mod_introduction corresponds to mod-python-basics
-        if str(module_id) == "mod-python-basics":
-            search_keys.append("mod_introduction")
+        mod_id = str(module_id)
+        search_keys = [topic, mod_id, mod_id.replace("-", "_")]
+        
+        # Special case mappings from diagnostic quiz keys to module IDs
+        special_mappings = {
+            "mod-python-basics": ["mod_introduction", "mod-introduction"],
+            "mod-data-types": ["mod_variables_types", "mod-variables-types"],
+            "mod-control-flow": ["mod_control_flow", "mod_loops_iteration", "mod-loops-iteration"],
+            "mod-functions": ["mod_functions_scope", "mod-functions-scope"],
+            "mod-modules-packages": ["mod_file_handling", "mod_error_handling", "mod-file-handling", "mod-error-handling"],
+        }
+        if mod_id in special_mappings:
+            search_keys.extend(special_mappings[mod_id])
             
         for sk in search_keys:
             if sk in difficulty_map:
@@ -714,6 +733,53 @@ class ModuleViewSet(viewsets.ModelViewSet):
     queryset = Module.objects.all().order_by('order')
     serializer_class = ModuleSerializer
     permission_classes = (permissions.IsAuthenticated,)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return context
+            
+        # Pre-calculate all module difficulties once to avoid N+1 queries in ModuleSerializer
+        mastery_vector = user.mastery_vector or {}
+        diff_map = mastery_vector.get("_module_difficulty", {}).copy()
+        
+        # Add reverse mappings from diagnostic quiz keys to module IDs
+        # This ensures lookups work when mastery vector uses different keys than module IDs
+        reverse_mappings = {
+            "mod_introduction": "mod-python-basics",
+            "mod_variables_types": "mod-data-types",
+            "mod_control_flow": "mod-control-flow",
+            "mod_loops_iteration": "mod-control-flow",
+            "mod_functions_scope": "mod-functions",
+            "mod_file_handling": "mod-modules-packages",
+            "mod_error_handling": "mod-modules-packages",
+        }
+        for alias_key, target_module in reverse_mappings.items():
+            if alias_key in diff_map:
+                diff_map[target_module] = diff_map[alias_key]
+                diff_map[target_module.replace("-", "_")] = diff_map[alias_key]
+        
+        # Merge with legacy quiz attempt notes to ensure consistency (same logic as Serializer)
+        from .models import QuizAttempt as CoreQuizAttempt
+        import re
+        attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
+        for attempt in attempts:
+            notes = attempt.notes or ""
+            match = re.search(r"module:([\w-]+):level:([A-Za-z]+)", notes)
+            if match:
+                m_id = match.group(1).lower()
+                lvl = match.group(2)
+                diff_map[m_id] = lvl
+                diff_map[m_id.replace("-", "_")] = lvl
+                # Also add reverse mapping
+                if m_id in reverse_mappings:
+                    target = reverse_mappings[m_id]
+                    diff_map[target] = lvl
+                    diff_map[target.replace("-", "_")] = lvl
+                
+        context["precalculated_difficulties"] = diff_map
+        return context
 
     def get_queryset(self):
         # Return all modules; serializer controls lesson visibility based on unlocks

@@ -20,6 +20,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function isStrongPassword(pw: string) {
@@ -55,7 +56,7 @@ export default function Login() {
       const body =
         mode === "login"
           ? { identifier, password }
-          : { email: identifier, password, firstName: firstName || undefined, lastName: lastName || undefined };
+          : { email: identifier, username, password, firstName: firstName || undefined, lastName: lastName || undefined };
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000);
@@ -130,6 +131,13 @@ export default function Login() {
                     placeholder="Last name"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
+                    className="w-full px-4 py-3 bg-muted/50 border border-transparent focus:border-primary rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary/20"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="w-full px-4 py-3 bg-muted/50 border border-transparent focus:border-primary rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-primary/20"
                   />
                 </>

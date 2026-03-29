@@ -11,6 +11,7 @@ from gamification.models import XpEvent, Streak
 from recommendation.services import normalize_topic
 
 class UserSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=False, allow_blank=True)
     email = serializers.EmailField(required=False, allow_blank=True)
     firstName = serializers.CharField(source='first_name', required=False, allow_blank=True)
     lastName = serializers.CharField(source='last_name', required=False, allow_blank=True)
@@ -21,8 +22,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'password', 'firstName', 'lastName', 'level', 'masteryVector', 'engagement_score', 'diagnostic_completed', 'has_taken_quiz', 'learning_velocity', 'stats', 'achievements', 'createdAt')
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = ('id', 'username', 'email', 'password', 'firstName', 'lastName', 'level', 'masteryVector', 'engagement_score', 'diagnostic_completed', 'has_taken_quiz', 'learning_velocity', 'stats', 'achievements', 'createdAt')
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'username': {'required': False} # Fallback handled in create
+        }
 
     def get_stats(self, obj):
         # Get user progress
@@ -145,12 +149,24 @@ class UserSerializer(serializers.ModelSerializer):
         return achievements_list
 
     def create(self, validated_data):
-        username = validated_data.get('username') or validated_data['email']
+        # Prioritize explicit username, then email, then generate one if both missing
+        username = validated_data.get('username')
+        email = validated_data.get('email')
+        
+        # Ensure we use the provided username if it exists and is not just whitespace
+        if not username or (isinstance(username, str) and not username.strip()):
+            username = email or f"user_{int(timezone.now().timestamp())}"
+            
+        # Explicit initialization of adaptive fields for a clean new-user state
         user = User(
             username=username,
-            email=validated_data['email'],
+            email=email or "",
             first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', '')
+            last_name=validated_data.get('last_name', ''),
+            level="Beginner",
+            diagnostic_completed=False,
+            has_taken_quiz=False,
+            mastery_vector={}
         )
         try:
             validate_password(validated_data['password'], user)
@@ -408,35 +424,59 @@ class ModuleSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated:
             return []
         
-        # Determine target level from mastery_vector or legacy logs
-        mastery_vector = user.mastery_vector or {}
-        difficulty_map = mastery_vector.get("_module_difficulty", {})
+        # Step 1: Check pre-calculated context (Performance Optimization)
+        # This prevents redundant database scans for each module in the list
+        precalculated = self.context.get("precalculated_difficulties", {})
         
         assigned_difficulty = None
-        search_keys = [str(obj.id), str(obj.id).replace("-", "_")]
-        # Special case: mod_introduction corresponds to mod-python-basics
-        if str(obj.id) == "mod-python-basics":
-            search_keys.append("mod_introduction")
+        # Support both dashed and underscored module IDs for robustness
+        mod_id = str(obj.id)
+        search_keys = [mod_id, mod_id.replace("-", "_")]
+        
+        # Special case mappings from diagnostic quiz keys to module IDs
+        special_mappings = {
+            "mod-python-basics": ["mod_introduction", "mod-introduction"],
+            "mod-data-types": ["mod_variables_types", "mod-variables-types"],
+            "mod-control-flow": ["mod_control_flow", "mod_loops_iteration", "mod-loops-iteration"],
+            "mod-functions": ["mod_functions_scope", "mod-functions-scope"],
+            "mod-modules-packages": ["mod_file_handling", "mod-error-handling", "mod-file-handling", "mod-error-handling"],
+        }
+        if mod_id in special_mappings:
+            search_keys.extend(special_mappings[mod_id])
             
         for sk in search_keys:
-            if sk in difficulty_map:
-                assigned_difficulty = difficulty_map[sk]
+            # Support both original case and lowercase matching for maximum robustness
+            if sk in precalculated:
+                assigned_difficulty = precalculated[sk]
+                break
+            if sk.lower() in precalculated:
+                assigned_difficulty = precalculated[sk.lower()]
                 break
         
         if not assigned_difficulty:
-            # Fallback to legacy loop through quiz attempts
+            # Step 2: Fallback to old mastery_vector check (safety mechanism)
+            mastery_vector = user.mastery_vector or {}
+            difficulty_map = mastery_vector.get("_module_difficulty", {})
+            for sk in search_keys:
+                if sk in difficulty_map:
+                    assigned_difficulty = difficulty_map[sk]
+                    break
+        
+        if not assigned_difficulty:
+            # Step 3: Final fallback to legacy quiz attempt logs
             from .models import QuizAttempt as CoreQuizAttempt
             attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
             for attempt in attempts:
                 notes = attempt.notes or ""
-                match = re.search(r"module:(\d+):level:([A-Za-z]+)", notes)
-                if match:
+                # Support both numeric and slug-based module IDs (e.g., mod-python-basics)
+                match = re.search(r"module:([\w-]+):level:([A-Za-z]+)", notes)
+                if match and match.group(1).lower() == str(obj.id).lower():
                     assigned_difficulty = match.group(2)
         
         target_level = assigned_difficulty or user.level or "Beginner"
         normalized = target_level.strip().lower()
         if normalized in ("pro", "advanced"):
-            normalized = "Pro"
+            normalized = "Pro"  # Database uses "Pro"
         elif normalized == "intermediate":
             normalized = "Intermediate"
         else:

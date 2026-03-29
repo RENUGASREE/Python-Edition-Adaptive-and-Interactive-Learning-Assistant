@@ -106,16 +106,24 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
 
             # Assign per-module difficulty tier
             module_difficulty = _module_difficulty_tier(score)
-            module_difficulty_map[canon_topic] = module_difficulty
-
-            # Use module mapping if available
+            
+            # Resolve topic to the actual canonical module ID (e.g., 'mod-introduction' -> 'mod-python-basics')
             target_module = (
                 Lesson.objects.filter(module_id__icontains=topic.replace("mod-", ""))
                 .values_list("module_id", flat=True)
                 .first()
             )
             if not target_module:
-                target_module = topic  # Fallback
+                if canon_topic in ["mod-introduction", "introduction"]:
+                    target_module = "mod-python-basics"
+                else:
+                    target_module = topic # Fallback
+            
+            # Save to difficulty map using canonical ID and legacy variants for maximum robustness
+            module_difficulty_map[target_module] = module_difficulty
+            module_difficulty_map[target_module.replace("-", "_")] = module_difficulty
+            if canon_topic != target_module:
+                module_difficulty_map[canon_topic] = module_difficulty
 
             UserMastery.objects.update_or_create(
                 user=user,

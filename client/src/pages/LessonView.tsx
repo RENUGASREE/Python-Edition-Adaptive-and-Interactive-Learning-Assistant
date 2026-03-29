@@ -13,7 +13,7 @@ import { useMasteryUpdate } from "@/hooks/use-mastery-update";
 import { useState, useEffect, useMemo, Suspense, lazy } from "react";
 import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiUrl, getAccessToken } from "@/lib/api";
 import { useModules } from "@/hooks/use-modules";
 import { Layout } from "@/components/Layout";
@@ -26,7 +26,14 @@ const ChatTutor = lazy(() => import("@/components/ChatTutor").then((mod) => ({ d
 export default function LessonView() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const lessonId = id || "";
+  
+  // CRITICAL: Force refetch user data on mount to ensure fresh masteryVector after quiz
+  useEffect(() => {
+    queryClient.refetchQueries({ queryKey: ["/api/auth/user"], exact: true });
+  }, [queryClient]);
+  
   const { data: lesson, isLoading, error: lessonFetchError, refetch } = useLesson(lessonId);
   const { data: modules, isLoading: loadingModules } = useModules();
   const { data: quizAttempts, isLoading: loadingQuizAttempts } = useQuery({
@@ -89,6 +96,19 @@ export default function LessonView() {
 
   const moduleLevels = useMemo(() => {
     const levels: Record<string, string> = {};
+
+    const mvDiffs = (user as any)?.masteryVector?._module_difficulty || {};
+    Object.entries(mvDiffs).forEach(([key, val]) => {
+      levels[key] = val as string;
+      if (typeof key === "string" && key.includes("_")) {
+        levels[key.replace(/_/g, "-")] = val as string;
+      }
+    });
+
+    if (levels["mod-introduction"] || levels["mod_introduction"]) {
+      levels["mod-python-basics"] = levels["mod-introduction"] || levels["mod_introduction"];
+    }
+
     (quizAttempts || []).forEach((attempt: any) => {
       const parsed = parseModuleLevel(attempt?.notes);
       if (parsed && parsed.moduleId) {
@@ -96,7 +116,7 @@ export default function LessonView() {
       }
     });
     return levels;
-  }, [quizAttempts]);
+  }, [quizAttempts, user]);
 
   const placementCompleted = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
   const allLessons = useMemo(() => {
