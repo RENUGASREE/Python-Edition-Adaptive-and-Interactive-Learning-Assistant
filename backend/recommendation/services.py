@@ -247,12 +247,32 @@ def update_shift_outcome(user: User, topic: str, mastery_before: float | None, m
 
 
 def _rank_topics(user: User, scoring_fn):
-    mastery_vector = {normalize_topic(k): float(v) for k, v in (user.mastery_vector or {}).items()}
+    mastery_vector = {normalize_topic(k): float(v) for k, v in (user.mastery_vector or {}).items() if not k.startswith("_")}
     engagement = user.engagement_score or 0.5
-    # Normalize lesson profile topics and merge with canonical set
-    topics = {normalize_topic(t) for t in LessonProfile.objects.values_list("topic", flat=True)}
+    
+    # We must only rank topics whose difficulty matches the user's assigned module difficulty.
+    valid_topics = []
+    profiles = list(LessonProfile.objects.all())
+    lesson_ids = [str(p.lesson_id) for p in profiles if p.lesson_id]
+    
+    # Get the module map for these lesson IDs
+    lessons = Lesson.objects.filter(id__in=lesson_ids).values("id", "module_id")
+    module_by_lesson_id = {str(l["id"]): l["module_id"] for l in lessons}
+    
+    for profile in profiles:
+        mod_id = module_by_lesson_id.get(str(profile.lesson_id))
+        if not mod_id:
+            continue
+        # What is the user's assigned difficulty for this specific module?
+        target_diff = _get_module_difficulty(user, mod_id)
+        # Only consider this topic if its difficulty matches the assigned tier
+        if profile.difficulty == target_diff:
+            valid_topics.append(profile.topic)
+
+    topics = set(valid_topics)
     if not topics:
         topics = set(_CANONICAL_TOPICS)
+        
     candidates = []
     for topic in topics:
         mastery = float(mastery_vector.get(topic, 0.3))
@@ -275,7 +295,7 @@ def _rank_topics(user: User, scoring_fn):
             "mastery_vector": mastery_vector,
         },
     )
-    return candidates[0]
+    return candidates
 
 
 def _progress_user_id(user: User) -> str:
@@ -294,19 +314,36 @@ def _normalize_track(level: str | None) -> str:
 # Mapping from recommendation canonical topics -> diagnostic quiz module keys.
 # Needed because the quiz stores scores as "mod_variables_types" but the
 # recommendation engine uses "variables" as the canonical topic name.
+# Mapping from lesson 'module_id' -> diagnostic quiz metric keys.
+# When a lesson is evaluated for difficulty, its module_id (e.g. "mod-python-basics")
+# is normalized (e.g. "mod_python_basics") and mapped to the quiz keys here.
 _CANONICAL_TO_MODULE_KEYS = {
-    "variables":       ["mod_variables_types", "variables_types", "variables"],
-    "conditions":      ["mod_control_flow", "control_flow", "conditions"],
-    "loops":           ["mod_loops_iteration", "loops_iteration", "loops"],
-    "functions":       ["mod_functions_scope", "functions_scope", "functions"],
-    "data_structures": ["mod_data_structures", "data_structures"],
-    "oop":             ["mod_oop", "oop"],
-    # Extended modules that may appear in the quiz
-    "introduction":    ["mod_introduction", "introduction"],
-    "file_handling":   ["mod_file_handling", "file_handling"],
-    "error_handling":  ["mod_error_handling", "error_handling"],
-    "advanced_python": ["mod_advanced_python", "advanced_python"],
-    "real_world_projects": ["mod_real_world_projects", "real_world_projects"],
+    # Intro/Basics
+    "mod_python_basics":       ["mod_introduction"],
+    "introduction":            ["mod_introduction"],
+    
+    # Types/Variables
+    "mod_data_types":          ["mod_variables_types"],
+    "variables":               ["mod_variables_types"],
+    
+    # Control Flow
+    "mod_control_flow":        ["mod_control_flow", "mod_loops_iteration"],
+    "conditions":              ["mod_control_flow"],
+    "loops":                   ["mod_loops_iteration"],
+    
+    # Functions
+    "mod_functions":           ["mod_functions_scope"],
+    "functions":               ["mod_functions_scope"],
+    
+    # File & Error Handling
+    "mod_file_handling":       ["mod_file_handling"],
+    "mod_error_handling":      ["mod_error_handling"],
+    
+    # OOP & Advanced
+    "mod_oop":                 ["mod_oop"],
+    "mod_modules_packages":    ["mod_advanced_python"],
+    "mod_advanced_python":     ["mod_advanced_python"],
+    "mod_real_world_projects": ["mod_real_world_projects"],
 }
 
 
@@ -362,21 +399,26 @@ def _pick_next_lesson_for_topic(user: User, topic: str) -> tuple[Lesson | None, 
       <  50%  => 'Beginner'
     """
     canon = normalize_topic(topic)
-    aliases = [canon]
+    aliases = [topic, canon]
     for k, v in _TOPIC_SYNONYMS.items():
         if k == canon:
-            aliases = [canon] + v
+            aliases.extend(v)
             break
     profiles = list(LessonProfile.objects.filter(topic__in=aliases).values("lesson_id", "prerequisites", "difficulty"))
     if not profiles:
         return None, None
-    profile_by_lesson_id = {int(p["lesson_id"]): (p.get("prerequisites") or []) for p in profiles if p.get("lesson_id") is not None}
+    profile_by_lesson_id = {str(p["lesson_id"]): (p.get("prerequisites") or []) for p in profiles if p.get("lesson_id") is not None}
     lesson_ids = list(profile_by_lesson_id.keys())
     if not lesson_ids:
         return None, None
 
-    # Use per-module difficulty for this topic
-    target = _get_module_difficulty(user, topic)
+    # Fetch a sample lesson to determine its module_id for difficulty lookup
+    sample_lesson = Lesson.objects.filter(id__in=lesson_ids).first()
+    if sample_lesson and sample_lesson.module_id:
+        target = _get_module_difficulty(user, sample_lesson.module_id)
+    else:
+        # Fallback to topic name if no lesson is found
+        target = _get_module_difficulty(user, topic)
 
     lessons_qs = Lesson.objects.filter(id__in=lesson_ids, difficulty=target).order_by("module_id", "order", "id")
     if not lessons_qs.exists():
@@ -392,12 +434,12 @@ def _pick_next_lesson_for_topic(user: User, topic: str) -> tuple[Lesson | None, 
         .values_list("lesson_id", flat=True)
     )
 
-    def prereqs_met(lesson_id: int) -> bool:
-        raw = profile_by_lesson_id.get(int(lesson_id), []) or []
+    def prereqs_met(lesson_id: str) -> bool:
+        raw = profile_by_lesson_id.get(str(lesson_id), []) or []
         prereq_ids = []
         for val in raw:
             try:
-                prereq_ids.append(int(val))
+                prereq_ids.append(str(val))
             except Exception:
                 continue
         return (not prereq_ids) or all(pid in completed_ids for pid in prereq_ids)
@@ -430,11 +472,23 @@ def recommend_next(user: User):
         return cached
     algorithm = "strategy_a" if assignment.strategy_name == "A" else "strategy_b"
     scoring_fn = compute_priority_score if assignment.strategy_name == "A" else compute_priority_score_b
-    score, topic, mastery, failure_rate, prereq_weight, engagement, velocity_weight, struggle_weight, difficulty_adjustment = _rank_topics(user, scoring_fn)
-    lesson, module = _pick_next_lesson_for_topic(user, topic)
+    candidates = _rank_topics(user, scoring_fn)
+    
+    lesson = None
+    module = None
+    # Iterate through candidates until we find a topic with an available lesson
+    for c in candidates:
+        score, topic, mastery, failure_rate, prereq_weight, engagement, velocity_weight, struggle_weight, difficulty_adjustment = c
+        lesson, module = _pick_next_lesson_for_topic(user, topic)
+        if lesson and module:
+            break
+    
+    # If no topic has available lessons, we still need to set something from the best topic for logging
+    if not lesson or not module:
+        score, topic, mastery, failure_rate, prereq_weight, engagement, velocity_weight, struggle_weight, difficulty_adjustment = candidates[0]
 
     # Resolve the per-module difficulty that was actually used for this recommendation
-    module_difficulty_assigned = _get_module_difficulty(user, topic)
+    module_difficulty_assigned = _get_module_difficulty(user, lesson.module_id if lesson else topic)
     base_difficulty = None
     if lesson:
         base_difficulty = lesson.difficulty or module_difficulty_assigned

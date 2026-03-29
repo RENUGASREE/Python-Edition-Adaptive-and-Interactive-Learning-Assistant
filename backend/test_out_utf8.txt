@@ -1,0 +1,75 @@
+﻿python : rank_topics
+At line:1 char:1
++ python
+test_recommend.py 2>&1 |
+python -c "import sys;
+[print(l.rstri ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo
+      : NotSpecified: (r
+  ank_topics:String) []
+ , RemoteException
+    + FullyQualifiedError
+   Id : NativeCommandErr
+  or
+
+recommendation_scored
+fallback_beginner_selected
+Traceback (most recent
+call last):
+  File "G:\my works\final_
+year\Python_Edition\backen
+d\test_recommend.py",
+line 12, in <module>
+    result =
+recommend_next(user)
+
+^^^^^^^^^^^^^^^^^^^^
+  File "G:\my works\final_
+year\Python_Edition\backen
+d\recommendation\services.
+py", line 433, in
+recommend_next
+    score, topic,
+mastery, failure_rate,
+prereq_weight,
+engagement,
+velocity_weight,
+struggle_weight,
+difficulty_adjustment =
+_rank_topics(user,
+scoring_fn)
+
+
+
+
+                      ^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "G:\my works\final_
+year\Python_Edition\backen
+d\recommendation\services.
+py", line 250, in
+_rank_topics
+    mastery_vector =
+{normalize_topic(k):
+float(v) for k, v in
+(user.mastery_vector or
+{}).items()}
+
+                ^^^^^^^^
+TypeError: float()
+argument must be a string
+or a real number, not
+'dict'
+Testing recommend_next for each user...
+
+--- User: Renu ---
+  next_topic:              mini_project_2
+  difficulty_level:        Beginner
+  module_difficulty_assigned: Beginner
+  recommended_lesson_title: Hello World ? Your First Python Program
+  reason_codes:            ['difficulty_adjust_down', 'prerequisite', 'fallback_beginner', 'low_velocity', 'low_mastery']
+
+--- User: editionpython@gmail.com ---
+  ERROR:

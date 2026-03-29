@@ -408,21 +408,34 @@ class ModuleSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated:
             return []
         
-        # Determine target level from quiz attempts notes
-        # In this project, 'QuizAttempt' refers to the model tracking results.
-        # We need to filter by user and order by date.
-        from .models import QuizAttempt as CoreQuizAttempt
-        attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
-        level_map = {}
-        for attempt in attempts:
-            notes = attempt.notes or ""
-            match = re.search(r"module:(\d+):level:([A-Za-z]+)", notes)
-            if match:
-                level_map[int(match.group(1))] = match.group(2)
+        # Determine target level from mastery_vector or legacy logs
+        mastery_vector = user.mastery_vector or {}
+        difficulty_map = mastery_vector.get("_module_difficulty", {})
         
-        target_level = level_map.get(obj.id) or user.level or "Beginner"
+        assigned_difficulty = None
+        search_keys = [str(obj.id), str(obj.id).replace("-", "_")]
+        # Special case: mod_introduction corresponds to mod-python-basics
+        if str(obj.id) == "mod-python-basics":
+            search_keys.append("mod_introduction")
+            
+        for sk in search_keys:
+            if sk in difficulty_map:
+                assigned_difficulty = difficulty_map[sk]
+                break
+        
+        if not assigned_difficulty:
+            # Fallback to legacy loop through quiz attempts
+            from .models import QuizAttempt as CoreQuizAttempt
+            attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
+            for attempt in attempts:
+                notes = attempt.notes or ""
+                match = re.search(r"module:(\d+):level:([A-Za-z]+)", notes)
+                if match:
+                    assigned_difficulty = match.group(2)
+        
+        target_level = assigned_difficulty or user.level or "Beginner"
         normalized = target_level.strip().lower()
-        if normalized == "advanced":
+        if normalized in ("pro", "advanced"):
             normalized = "Pro"
         elif normalized == "intermediate":
             normalized = "Intermediate"

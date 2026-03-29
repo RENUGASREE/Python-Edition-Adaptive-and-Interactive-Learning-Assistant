@@ -138,9 +138,18 @@ def strongest_weakest_topics(user: User):
         mastery = user.mastery_vector or {}
         if not mastery:
             return None, None
-        filtered = [(key, value) for key, value in mastery.items() if value is not None]
+        
+        # Only consider numeric mastery scores and ignore internal keys (keys starting with _)
+        filtered = [
+            (key, float(value)) 
+            for key, value in mastery.items() 
+            if isinstance(value, (int, float)) and not str(key).startswith("_")
+        ]
+        
         if not filtered:
             return None, None
+            
+        # Sort by value
         sorted_items = sorted(filtered, key=lambda item: item[1])
         weakest = sorted_items[0][0]
         strongest = sorted_items[-1][0]

@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "G:\my works\final_year\Python_Edition\backend\test_submit.py", line 21, in <module>
+    correct_opt = next((opt for opt in opts if opt.get("is_correct")), None)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "G:\my works\final_year\Python_Edition\backend\test_submit.py", line 21, in <genexpr>
+    correct_opt = next((opt for opt in opts if opt.get("is_correct")), None)
+                                               ^^^^^^^
+AttributeError: 'str' object has no attribute 'get'

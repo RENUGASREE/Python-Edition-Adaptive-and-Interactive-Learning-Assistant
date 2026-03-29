@@ -123,13 +123,34 @@ def _module_completed(user, module_id):
 
 def _module_level_map(user):
     levels = {}
-    # QuizAttempt uses `completed_at` as the timestamp field.
-    # Ordering by a non-existent field can raise FieldError and break `/api/modules/`.
+    mastery_vector = user.mastery_vector or {}
+    difficulty_map = mastery_vector.get("_module_difficulty", {})
+    
+    # 1. Populate from mastery_vector (primary source)
+    for key, val in difficulty_map.items():
+        levels[key] = val
+        # Handle string vs int IDs if any
+        if key.isdigit():
+            levels[int(key)] = val
+        if key.replace("_", "-").replace("mod-", "").isdigit():
+            try:
+                levels[int(key.replace("_", "-").replace("mod-", ""))] = val
+            except ValueError:
+                pass
+            
+    # 2. Overlay from QuizAttempt notes (legacy/manual)
     attempts = QuizAttempt.objects.filter(user=user).order_by("completed_at")
     for attempt in attempts:
         match = re.search(r"module:(\d+):level:([A-Za-z]+)", attempt.notes or "")
         if match:
             levels[int(match.group(1))] = match.group(2)
+            
+    # 3. Handle special diagnostic module name mappings
+    if "mod_introduction" in difficulty_map:
+        levels["mod-python-basics"] = difficulty_map["mod_introduction"]
+    if "mod_variables_types" in difficulty_map:
+        levels["mod-variables-types"] = difficulty_map["mod_variables_types"]
+
     return levels
 
 def _normalize_level(level):
@@ -148,6 +169,7 @@ def _lesson_ids_for_user_module(user, module_id):
     based on the user's individual mastery per topic.
     """
     mastery_vector = user.mastery_vector or {}
+    difficulty_map = mastery_vector.get("_module_difficulty", {})
     all_lessons_in_module = Lesson.objects.filter(module_id=module_id).order_by('order')
     
     # Identify unique topics (titles) in this module
@@ -160,20 +182,35 @@ def _lesson_ids_for_user_module(user, module_id):
             
     adaptive_lesson_ids = []
     for topic in unique_topics:
-        # Determine the target level for this specific topic
-        topic_score = mastery_vector.get(topic, 0)
+        # Determine the target level for this specific topic/module
+        # Priority: _module_difficulty entry -> Topic Score -> Module Score -> User Global Level
         
-        # Fallback priority: Topic Score -> Module Score -> User Global Level
-        if topic_score == 0:
-            topic_score = mastery_vector.get(str(module_id), 0)
+        assigned_difficulty = None
+        # Try to find assigned difficulty in the map
+        # Normalize keys for matching (e.g. mod-python-basics -> mod_python_basics)
+        search_keys = [topic, str(module_id), str(module_id).replace("-", "_")]
+        # Special case: mod_introduction corresponds to mod-python-basics
+        if str(module_id) == "mod-python-basics":
+            search_keys.append("mod_introduction")
             
-        if topic_score > 0:
-            difficulty_label = normalize_level_for_score(topic_score * 100 if topic_score <= 1.0 else topic_score)
+        for sk in search_keys:
+            if sk in difficulty_map:
+                assigned_difficulty = difficulty_map[sk]
+                break
+        
+        if assigned_difficulty:
+            target_difficulty = map_level_to_db(assigned_difficulty)
         else:
-            # Final fallback to user's profile level
-            difficulty_label = user.level or "Beginner"
-            
-        target_difficulty = map_level_to_db(difficulty_label)
+            # Fallback to score-based mapping
+            topic_score = mastery_vector.get(topic, 0)
+            if topic_score == 0:
+                topic_score = mastery_vector.get(str(module_id), 0)
+                
+            if topic_score > 0:
+                difficulty_label = normalize_level_for_score(topic_score * 100 if topic_score <= 1.0 else topic_score)
+            else:
+                difficulty_label = user.level or "Beginner"
+            target_difficulty = map_level_to_db(difficulty_label)
         
         # Try to find the lesson matching this topic AND difficulty
         best_match = Lesson.objects.filter(module_id=module_id, title=topic, difficulty=target_difficulty).first()
@@ -186,8 +223,6 @@ def _lesson_ids_for_user_module(user, module_id):
             adaptive_lesson_ids.append(best_match.id)
             
     if adaptive_lesson_ids:
-        # Final safety check: ensure the IDs actually exist in the DB
-        # items = Lesson.objects.filter(id__in=adaptive_lesson_ids)
         return adaptive_lesson_ids
         
     return list(Lesson.objects.filter(module_id=module_id).values_list("id", flat=True))
