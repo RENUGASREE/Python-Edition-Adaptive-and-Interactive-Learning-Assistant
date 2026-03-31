@@ -269,19 +269,11 @@ export default function PlacementQuiz() {
         const freshUser = userRes.ok ? await userRes.json() : null;
         const freshModules = modulesRes.ok ? await modulesRes.json() : [];
         
-        // Update cache with fresh data
+        // Update cache with fresh data for when user navigates manually
         queryClient.setQueryData(["/api/auth/user"], freshUser);
         queryClient.setQueryData(["/api/modules"], freshModules);
         
-        // Get correct first lesson ID from fresh data
-        const freshLessons = freshModules?.flatMap((m: any) => (m.lessons || []).map((l: any) => ({ ...l, moduleOrder: m.order }))) || [];
-        freshLessons.sort((a: any, b: any) => {
-          if (a.moduleOrder !== b.moduleOrder) return a.moduleOrder - b.moduleOrder;
-          return (a.order || 0) - (b.order || 0);
-        });
-        const freshFirstLessonId = freshLessons[0]?.id;
-        
-        setTimeout(() => setLocation(freshFirstLessonId ? `/lesson/${freshFirstLessonId}` : "/dashboard"), 2000);
+        // User will click "Go to first lesson" button manually - no auto-redirect
       }
     } catch (err: any) {
       setError(err.message || "Failed to submit diagnostic quiz");
