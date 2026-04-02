@@ -1379,29 +1379,29 @@ class SubmitQuizView(APIView):
         # Analyze skill gaps
         analyze_user_skill_gaps(request.user)
 
-        # Update UserProgress
+        # Update UserProgress - always mark quiz as completed regardless of score
         user = request.user
         user_id = user.original_uuid or str(user.id)
-        is_passed = (score / total_questions) >= 0.8 if total_questions > 0 else True
+        quiz_percentage = round((score / total_questions) * 100, 2) if total_questions > 0 else 0
         
-        if is_passed:
-            progress, _ = UserProgress.objects.get_or_create(user_id=user_id, lesson_id=quiz.lesson_id)
-            progress.quiz_completed = True
-            progress.score = int((score / total_questions) * 100) if total_questions > 0 else 100
-            
-            # Overall completion ONLY if challenge is also done
-            if progress.challenge_completed:
-                progress.completed = True
-                if not progress.completed_at:
-                    progress.completed_at = timezone.now()
-            progress.save()
-            logger.info(f"Quiz completed for user {user.id}, lesson {quiz.lesson_id}")
+        # Always update progress when quiz is submitted (no minimum score requirement)
+        progress, _ = UserProgress.objects.get_or_create(user_id=user_id, lesson_id=quiz.lesson_id)
+        progress.quiz_completed = True
+        progress.score = int(quiz_percentage) if total_questions > 0 else 100
+        
+        # Overall completion ONLY if challenge is also done
+        if progress.challenge_completed:
+            progress.completed = True
+            if not progress.completed_at:
+                progress.completed_at = timezone.now()
+        progress.save()
+        logger.info(f"Quiz completed for user {user.id}, lesson {quiz.lesson_id}, score: {quiz_percentage}%")
 
         return Response({
             "score": score,
             "total": total_questions,
-            "percentage": round((score / total_questions) * 100, 2) if total_questions > 0 else 0,
-            "passed": is_passed
+            "percentage": quiz_percentage,
+            "passed": True
         })
 
 

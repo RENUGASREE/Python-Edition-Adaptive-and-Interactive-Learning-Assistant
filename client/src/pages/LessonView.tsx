@@ -583,39 +583,32 @@ export default function LessonView() {
                         return isCorrect ? acc + 1 : acc;
                       }, 0);
                       const score = Math.round((correctCount / questions.length) * 100);
-
-                      // Only mark as completed if this is a passing score (>=80%)
-                      const isPassing = score >= 80;
                       
                       await progressMutation.mutateAsync({
                         lessonId: lessonId,
                         completed: false, // Will be set to true by backend only when both quiz and challenge are done
                         score: score,
-                        quizCompleted: isPassing,
+                        quizCompleted: true,
                         lastCode: JSON.stringify(answers)
                       });
                       
                       // Refetch to see if overall completion is now True
                       refetch();
                       
-                      if (isPassing) {
-                        toast({
-                          title: "Knowledge Check Passed! ✅",
-                          description: `Great job! You scored ${score}%. Now complete the Coding Challenge to unlock the next lesson.`,
-                        });
-                        
-                        confetti({
-                          particleCount: 100,
-                          spread: 70,
-                          origin: { y: 0.6 }
-                        });
-                      } else {
-                        toast({
-                          title: "Knowledge Check Complete",
-                          description: `You scored ${score}%. You need 80% or more to pass. Please review and try again.`,
-                          variant: "default",
-                        });
-                      }
+                      const motivationalMessage = score >= 80 
+                        ? "Great job! Now complete the Coding Challenge to unlock the next lesson."
+                        : "Keep learning! Complete the Coding Challenge to unlock the next lesson.";
+                      
+                      toast({
+                        title: "Knowledge Check Completed! ✅",
+                        description: `You scored ${score}%. ${motivationalMessage}`,
+                      });
+                      
+                      confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 }
+                      });
                     } catch (err: any) {
                       toast({
                         title: "Error",
