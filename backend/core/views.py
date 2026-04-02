@@ -949,10 +949,14 @@ class UserProgressViewSet(viewsets.ModelViewSet):
                     update_shift_outcome(user, topic, mastery_before, mastery_after)
                 
                 # Logic to unlock the next lesson immediately
+                # Get lessons matching user's difficulty level for proper sequencing
                 target_difficulty = (lesson.difficulty or user.level or "Beginner").strip()
                 
-                # Get all lessons in this module to find the sequence
-                lessons_in_module = Lesson.objects.filter(module_id=lesson.module_id).order_by('order')
+                # Get lessons in this module filtered by user's difficulty level
+                lessons_in_module = Lesson.objects.filter(
+                    module_id=lesson.module_id, 
+                    difficulty=target_difficulty
+                ).order_by('order')
                 lesson_list = list(lessons_in_module)
                 
                 try:
@@ -965,7 +969,7 @@ class UserProgressViewSet(viewsets.ModelViewSet):
                     if current_idx != -1 and current_idx + 1 < len(lesson_list):
                         next_lesson = lesson_list[current_idx + 1]
                         # Pre-create progress for next lesson if it doesn't exist
-                        # This marks it as "unlocked" in some UI logic
+                        # This marks it as "unlocked" in UI logic
                         UserProgress.objects.get_or_create(
                             user_id=user_id,
                             lesson_id=str(next_lesson.id),
