@@ -176,75 +176,58 @@ def _normalize_level(level):
 
 def _lesson_ids_for_user_module(user, module_id):
     """
-    Adaptive Fetching: Returns specific lesson IDs for each topic in the module
-    based on the user's individual mastery per topic.
+    Returns lesson IDs for the user filtered by their assigned difficulty level.
     """
     mastery_vector = user.mastery_vector or {}
-    difficulty_map = mastery_vector.get("_module_difficulty", {})
-    all_lessons_in_module = Lesson.objects.filter(module_id=module_id).order_by('order')
+    difficulty_map = mastery_vector.get("_module_difficulty", {}).copy()
     
-    # Identify unique topics (titles) in this module
-    unique_topics = []
-    seen_titles = set()
-    for l in all_lessons_in_module:
-        if l.title not in seen_titles:
-            unique_topics.append(l.title)
-            seen_titles.add(l.title)
-            
-    adaptive_lesson_ids = []
-    for topic in unique_topics:
-        # Determine the target level for this specific topic/module
-        # Priority: _module_difficulty entry -> Topic Score -> Module Score -> User Global Level
-        
-        # Support both dashed and underscored module IDs for robustness
-        assigned_difficulty = None
-        mod_id = str(module_id)
-        search_keys = [topic, mod_id, mod_id.replace("-", "_")]
-        
-        # Special case mappings from diagnostic quiz keys to module IDs
-        special_mappings = {
-            "mod-python-basics": ["mod_introduction", "mod-introduction"],
-            "mod-data-types": ["mod_variables_types", "mod-variables-types"],
-            "mod-control-flow": ["mod_control_flow", "mod_loops_iteration", "mod-loops-iteration"],
-            "mod-functions": ["mod_functions_scope", "mod-functions-scope"],
-            "mod-modules-packages": ["mod_file_handling", "mod_error_handling", "mod-file-handling", "mod-error-handling"],
-        }
-        if mod_id in special_mappings:
-            search_keys.extend(special_mappings[mod_id])
-            
-        for sk in search_keys:
-            if sk in difficulty_map:
-                assigned_difficulty = difficulty_map[sk]
-                break
-        
-        if assigned_difficulty:
-            target_difficulty = map_level_to_db(assigned_difficulty)
-        else:
-            # Fallback to score-based mapping
-            topic_score = mastery_vector.get(topic, 0)
-            if topic_score == 0:
-                topic_score = mastery_vector.get(str(module_id), 0)
-                
-            if topic_score > 0:
-                difficulty_label = normalize_level_for_score(topic_score * 100 if topic_score <= 1.0 else topic_score)
-            else:
-                difficulty_label = user.level or "Beginner"
-            target_difficulty = map_level_to_db(difficulty_label)
-        
-        # Try to find the lesson matching this topic AND difficulty
-        best_match = Lesson.objects.filter(module_id=module_id, title=topic, difficulty=target_difficulty).first()
-        
-        # Fallback if specific level doesn't exist for this topic
-        if not best_match:
-            best_match = Lesson.objects.filter(module_id=module_id, title=topic).first()
-            
-        if best_match:
-            adaptive_lesson_ids.append(best_match.id)
-            
-    if adaptive_lesson_ids:
-        return adaptive_lesson_ids
-        
-    return list(Lesson.objects.filter(module_id=module_id).values_list("id", flat=True))
+    # Add reverse mappings from diagnostic quiz keys to actual module IDs
+    reverse_mappings = {
+        "mod_introduction": "mod-python-basics",
+        "mod_variables_types": "mod-data-types",
+        "mod_control_flow": "mod-control-flow",
+        "mod_loops_iteration": "mod-control-flow",
+        "mod_functions_scope": "mod-functions",
+        "mod_file_handling": "mod-modules-packages",
+        "mod_error_handling": "mod-modules-packages",
+    }
+    for alias_key, target_module in reverse_mappings.items():
+        if alias_key in difficulty_map:
+            difficulty_map[target_module] = difficulty_map[alias_key]
+            difficulty_map[target_module.replace("-", "_")] = difficulty_map[alias_key]
+    
+    # Find the assigned difficulty for this module
+    mod_id = str(module_id)
+    search_keys = [mod_id, mod_id.replace("-", "_")]
+    special_mappings = {
+        "mod-python-basics": ["mod_introduction", "mod-introduction"],
+        "mod-data-types": ["mod_variables_types", "mod-variables-types"],
+        "mod-control-flow": ["mod_control_flow", "mod_loops_iteration", "mod-loops-iteration"],
+        "mod-functions": ["mod_functions_scope", "mod-functions-scope"],
+        "mod-modules-packages": ["mod_file_handling", "mod_error_handling", "mod-file-handling", "mod-error-handling"],
+    }
+    if mod_id in special_mappings:
+        search_keys.extend(special_mappings[mod_id])
+    
+    assigned_difficulty = None
+    for sk in search_keys:
+        if sk in difficulty_map:
+            assigned_difficulty = difficulty_map[sk]
+            break
+    
+    # Map to database difficulty value
+    if assigned_difficulty:
+        target_difficulty = map_level_to_db(assigned_difficulty)
+    else:
+        target_difficulty = map_level_to_db(user.level or "Beginner")
+    
+    # Return lessons filtered by difficulty
+    lessons = Lesson.objects.filter(module_id=module_id, difficulty=target_difficulty).order_by('order')
+    if lessons.exists():
+        return list(lessons.values_list("id", flat=True))
+    
+    # Fallback: return all lessons if no lessons match the target difficulty
+    return list(Lesson.objects.filter(module_id=module_id).order_by('order').values_list("id", flat=True))
 
 def _prerequisites_met(user, lesson_id: str) -> bool:
     profile = LessonProfile.objects.filter(lesson_id=str(lesson_id)).first()
