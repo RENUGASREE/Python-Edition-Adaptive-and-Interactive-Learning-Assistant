@@ -241,11 +241,39 @@ def _prerequisites_met(user, lesson_id: str) -> bool:
     if not prereq_ids:
         return True
     user_id = _progress_user_id(user)
-    completed_ids = set(
-        UserProgress.objects.filter(user_id=user_id, lesson_id__in=prereq_ids, completed=True)
-        .values_list("lesson_id", flat=True)
-    )
-    return all(pid in completed_ids for pid in prereq_ids)
+    
+    # For each prerequisite, check if it's completed OR if any lesson
+    # at the same module/order (different difficulty) is completed
+    for prereq_id in prereq_ids:
+        # Direct completion check
+        direct_completed = UserProgress.objects.filter(
+            user_id=user_id, lesson_id=prereq_id, completed=True
+        ).exists()
+        if direct_completed:
+            continue  # This prereq is satisfied
+        
+        # Get the prerequisite lesson details
+        prereq_lesson = Lesson.objects.filter(id=prereq_id).first()
+        if not prereq_lesson:
+            continue  # Can't find the prereq lesson, skip it
+        
+        # Check if ANY lesson at same module + order is completed
+        # (handles different difficulties like Pro/Intermediate/Beginner)
+        same_order_lessons = Lesson.objects.filter(
+            module_id=prereq_lesson.module_id,
+            order=prereq_lesson.order
+        ).values_list('id', flat=True)
+        
+        any_completed = UserProgress.objects.filter(
+            user_id=user_id,
+            lesson_id__in=list(same_order_lessons),
+            completed=True
+        ).exists()
+        
+        if not any_completed:
+            return False  # This prereq is not satisfied
+    
+    return True
 
 def _module_unlocked(user, module):
     # Allow access to the first module for new users even if they haven't completed the placement quiz yet.
