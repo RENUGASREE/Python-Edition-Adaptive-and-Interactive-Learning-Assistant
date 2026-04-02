@@ -252,8 +252,8 @@ export default function LessonView() {
             origin: { y: 0.6 }
           });
           toast({
-            title: "Challenge Passed!",
-            description: "Great job! Your solution is correct.",
+            title: "Challenge Passed! ✅",
+            description: "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
             className: "bg-green-500 text-white border-none",
           });
           setMasteryImpact(0.06);
@@ -323,8 +323,8 @@ export default function LessonView() {
           origin: { y: 0.6 },
         });
         toast({
-          title: "Challenge Passed!",
-          description: "Great job! Your solution is correct.",
+          title: "Challenge Passed! ✅",
+          description: "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
           className: "bg-green-500 text-white border-none",
         });
         setMasteryImpact(0.06);
@@ -333,9 +333,10 @@ export default function LessonView() {
           progressMutation.mutate({
             userId: String(user.id),
             lessonId,
-            completed: true,
+            completed: false, // Will be set to true by backend only when both quiz and challenge are done
             lastCode: code,
             score: 100,
+            challengeCompleted: true,
             completedAt: new Date().toISOString(),
           });
           setIsCompleted(true);
@@ -485,9 +486,22 @@ export default function LessonView() {
                   onClick={() => {
                     const completed = isLessonCompleted(lessonId);
                     if (!completed) {
+                      const currentProgress = progress?.find(p => p.lessonId === lessonId);
+                      const quizDone = currentProgress?.quizCompleted ? true : false;
+                      const challengeDone = currentProgress?.challengeCompleted ? true : false;
+                      
+                      let message = "";
+                      if (!quizDone && !challengeDone) {
+                        message = "Please complete both the Knowledge Check and the Coding Challenge to unlock the next lesson.";
+                      } else if (!quizDone) {
+                        message = "Please complete the Knowledge Check to unlock the next lesson.";
+                      } else if (!challengeDone) {
+                        message = "Please complete the Coding Challenge to unlock the next lesson.";
+                      }
+                      
                       toast({
                         title: "Mastery Required",
-                        description: "Please complete both the Coding Challenge and the Knowledge Check to unlock the next session.",
+                        description: message || "Please complete all requirements to unlock the next lesson.",
                         variant: "default",
                       });
                       return;
@@ -570,27 +584,38 @@ export default function LessonView() {
                       }, 0);
                       const score = Math.round((correctCount / questions.length) * 100);
 
+                      // Only mark as completed if this is a passing score (>=80%)
+                      const isPassing = score >= 80;
+                      
                       await progressMutation.mutateAsync({
                         lessonId: lessonId,
-                        completed: false, // Mastery is now calculated on backend
+                        completed: false, // Will be set to true by backend only when both quiz and challenge are done
                         score: score,
-                        quizCompleted: true,
+                        quizCompleted: isPassing,
                         lastCode: JSON.stringify(answers)
                       });
                       
                       // Refetch to see if overall completion is now True
                       refetch();
                       
-                      toast({
-                        title: "Knowledge Check Completed",
-                        description: `You scored ${Math.round(score)}%`,
-                      });
-                      
-                      confetti({
-                        particleCount: 100,
-                        spread: 70,
-                        origin: { y: 0.6 }
-                      });
+                      if (isPassing) {
+                        toast({
+                          title: "Knowledge Check Passed! ✅",
+                          description: `Great job! You scored ${score}%. Now complete the Coding Challenge to unlock the next lesson.`,
+                        });
+                        
+                        confetti({
+                          particleCount: 100,
+                          spread: 70,
+                          origin: { y: 0.6 }
+                        });
+                      } else {
+                        toast({
+                          title: "Knowledge Check Complete",
+                          description: `You scored ${score}%. You need 80% or more to pass. Please review and try again.`,
+                          variant: "default",
+                        });
+                      }
                     } catch (err: any) {
                       toast({
                         title: "Error",
