@@ -257,10 +257,16 @@ export default function LessonView() {
             className: "bg-green-500 text-white border-none",
           });
           setMasteryImpact(0.06);
+          setIsCompleted(true);
           
           if (user) {
-            // Refetch progress to see if both requirements are now met
-            refetch();
+            // Refetch all relevant data to reflect the challenge completion
+            await Promise.all([
+              queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
+              queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
+              queryClient.refetchQueries({ queryKey: ["/api/lessons"] }),
+              refetch()
+            ]);
           }
         } else {
           setError(result.error || "Code ran but didn't pass all test cases. Check your output above.");
@@ -328,18 +334,29 @@ export default function LessonView() {
           className: "bg-green-500 text-white border-none",
         });
         setMasteryImpact(0.06);
+        setIsCompleted(true);
 
         if (user) {
-          progressMutation.mutate({
-            userId: String(user.id),
-            lessonId,
-            completed: false, // Will be set to true by backend only when both quiz and challenge are done
-            lastCode: code,
-            score: 100,
-            challengeCompleted: true,
-            completedAt: new Date().toISOString(),
-          });
-          setIsCompleted(true);
+          try {
+            await progressMutation.mutateAsync({
+              userId: String(user.id),
+              lessonId,
+              completed: false, // Will be set to true by backend only when both quiz and challenge are done
+              lastCode: code,
+              score: 100,
+              challengeCompleted: true,
+              completedAt: new Date().toISOString(),
+            });
+            
+            // Refetch all relevant data to reflect the challenge completion
+            await Promise.all([
+              queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
+              queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
+              queryClient.refetchQueries({ queryKey: ["/api/lessons"] })
+            ]);
+          } catch (err) {
+            console.error("Error updating progress after challenge:", err);
+          }
         }
 
         setOutput((prev) => (prev ? prev + "\n\n" : "") + "✅ All tests passed!");
@@ -592,8 +609,13 @@ export default function LessonView() {
                         lastCode: JSON.stringify(answers)
                       });
                       
-                      // Refetch to see if overall completion is now True
-                      refetch();
+                      // Refetch all relevant data to see if overall completion is now True
+                      await Promise.all([
+                        queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
+                        queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
+                        queryClient.refetchQueries({ queryKey: ["/api/lessons"] }),
+                        refetch()
+                      ]);
                       
                       const motivationalMessage = score >= 80 
                         ? "Great job! Now complete the Coding Challenge to unlock the next lesson."
