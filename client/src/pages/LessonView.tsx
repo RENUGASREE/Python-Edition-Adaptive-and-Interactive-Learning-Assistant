@@ -623,7 +623,7 @@ export default function LessonView() {
                       
                       toast({
                         title: "Knowledge Check Completed! ✅",
-                        description: `You scored ${score}%. ${motivationalMessage}`,
+                        description: motivationalMessage,
                       });
                       
                       confetti({
