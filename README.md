@@ -1,7 +1,6 @@
-# Python Edition: Adaptive Learning Platform 🐍
+# Python Edition: Adaptive & Interactive Learning Assistant 🐍
 
 A premium, AI-enhanced adaptive learning platform designed to take users from Python basics to professional mastery. The platform features a sophisticated recommendation engine, real-time code execution, and high-fidelity analytics.
-
 
 ---
 
@@ -9,7 +8,7 @@ A premium, AI-enhanced adaptive learning platform designed to take users from Py
 
 ### 🧠 Adaptive Learning Engine
 - **Diagnostic Placement**: A comprehensive 15-question quiz to assess baseline knowledge across 6 core modules.
-- **Mastery-Based Progression**: Intelligent backend logic that tracks proficiency (0.0 - 1.0) and unlocks content dynamically.
+- **Mastery-Based Progression**: Intelligent backend logic that tracks proficiency (0.0 – 1.0) and unlocks content dynamically.
 - **Personalized Recommendations**: Automatic difficulty adjustment (Beginner, Intermediate, Pro) for every module based on user performance.
 
 ### 📚 Professional Curriculum
@@ -30,51 +29,44 @@ A premium, AI-enhanced adaptive learning platform designed to take users from Py
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18, Vite, Tailwind CSS, Framer Motion, Recharts.
-- **Backend**: Django 5.0, Django REST Framework, PostgreSQL.
-- **AI/ML**: OpenAI GPT-4o (via RAG) for intelligent tutoring.
-- **Execution**: Isolated sandbox for secure Python code evaluation.
-
----
-
-## 🏁 Quick Start
-
-### 1. Prerequisites
-- Node.js 18+
-- Python 3.12+
-- PostgreSQL
-
-### 2. Backend Setup
-```bash
-cd backend
-python -m venv .venv
-# Activate venv: .\.venv\Scripts\activate (Windows) or source .venv/bin/activate (Mac/Linux)
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
-```
-*API runs at http://127.0.0.1:8000*
-
-### 3. Frontend Setup
-```bash
-cd client
-npm install
-npm run dev -- --port 3002
-```
-*Frontend runs at http://localhost:3002*
+| Layer | Technologies |
+|-------|-------------|
+| **Frontend** | React 18, Vite, Tailwind CSS, Framer Motion, Recharts |
+| **Backend** | Django 5.0, Django REST Framework, PostgreSQL |
+| **AI / ML** | OpenAI GPT-4o (via RAG) for intelligent tutoring |
+| **Execution** | Isolated sandbox for secure Python code evaluation |
 
 ---
 
 ## 📦 Project Structure
-- `backend/`: Django core, adaptive logic, and curriculum data.
-- `client/`: React application, UI components, and state management.
-- `assessments/`: Data models for quizzes and placement tests.
-- `evaluation/`: Logic for the adaptive recommendation engine.
+
+```
+Python_Edition/
+├── backend/            # Django core, adaptive logic, and curriculum data
+│   ├── ai_engine/      # RAG-powered AI tutoring engine
+│   ├── analytics/      # Performance tracking and analytics
+│   ├── assessments/    # Quizzes, placement tests, and challenges
+│   ├── core/           # Shared models and utilities
+│   ├── evaluation/     # Adaptive recommendation engine
+│   ├── gamification/   # Badges, streaks, and rewards
+│   ├── lessons/        # Lesson content management
+│   ├── recommendation/ # Personalized learning path suggestions
+│   └── users/          # User authentication and profiles
+├── client/             # React frontend application
+│   ├── public/         # Static assets
+│   └── src/            # Components, pages, hooks, and state management
+```
 
 ---
 
-## 🤝 Contributing
-Contributions are welcome! Please read the `CONTRIBUTING.md` for our code of conduct and the process for submitting pull requests.
+## 🏁 Prerequisites
+
+- **Node.js** 18+
+- **Python** 3.12+
+- **PostgreSQL**
+
+---
 
 ## 📄 License
-This project is licensed under the MIT License - see the `LICENSE` file for details.
+
+This project is licensed under the MIT License.
