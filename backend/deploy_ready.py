@@ -91,5 +91,33 @@ def setup_production():
     except Exception as e:
         print(f"❌ Error seeding curriculum: {e}")
 
+    # 4. Seed Badges & Certificate Templates
+    try:
+        from core.models import Badge, CertificateTemplate
+        
+        print("🏅 Seeding Gamification & Certificates...")
+        
+        # Badges
+        badges = [
+            {"name": "Python Pioneer", "description": "Completed the first lesson in Python Edition."},
+            {"name": "Quiz Master", "description": "Scored 100% on a module diagnostic quiz."},
+            {"name": "Streak Star", "description": "Maintained a 7-day learning streak."},
+            {"name": "Topic Pro", "description": "Reached 'Pro' level in any curriculum topic."}
+        ]
+        for b_data in badges:
+            Badge.objects.get_or_create(name=b_data["name"], defaults={"description": b_data["description"]})
+
+        # Certificate Templates
+        templates = [
+            {"code": "PY-FUND-01", "title": "Python Fundamentals", "description": "Certificate for mastering core Python syntax and logic."},
+            {"code": "DS-ALGO-01", "title": "Data Structures", "description": "Certificate for advanced proficiency in Python data structures."}
+        ]
+        for t_data in templates:
+            CertificateTemplate.objects.get_or_create(code=t_data["code"], defaults={"title": t_data["title"], "description": t_data["description"]})
+        
+        print("✅ Gamification & Certificates Seeded.")
+    except Exception as e:
+        print(f"❌ Error seeding gamification/certificates: {e}")
+
 if __name__ == "__main__":
     setup_production()
