@@ -1497,14 +1497,14 @@ class CertificateDownloadView(APIView):
         p.rect(0, 0, width, height, fill=1)
 
         # 2. Decorative Double Border
-        p.setStrokeColor(colors.MidnightBlue)
+        p.setStrokeColor(colors.midnightblue)
         p.setLineWidth(5)
         p.rect(1*cm, 1*cm, width-2*cm, height-2*cm)
         p.setLineWidth(1)
         p.rect(1.3*cm, 1.3*cm, width-2.6*cm, height-2.6*cm)
 
         # 3. Main Title
-        p.setFillColor(colors.MidnightBlue)
+        p.setFillColor(colors.midnightblue)
         p.setFont("Helvetica-Bold", 40)
         p.drawCentredString(width / 2.0, height - 5*cm, "Certificate of Achievement")
 
@@ -1518,7 +1518,7 @@ class CertificateDownloadView(APIView):
         p.drawCentredString(width / 2.0, height - 9*cm, f"{user.first_name} {user.last_name}")
 
         # 6. Specific Achievement
-        p.setFillColor(colors.MidnightBlue)
+        p.setFillColor(colors.midnightblue)
         p.setFont("Helvetica", 18)
         p.drawCentredString(width / 2.0, height - 11*cm, "For successfully mastering the specialized curriculum of")
         
@@ -1530,7 +1530,7 @@ class CertificateDownloadView(APIView):
         p.drawCentredString(width / 2.0, height - 14*cm, "Python Edition Adaptive Learning Platform")
 
         # 8. Digital Seal (Bottom Right)
-        p.setStrokeColor(colors.Goldenrod)
+        p.setStrokeColor(colors.goldenrod)
         p.setLineWidth(2)
         p.circle(width - 4*cm, 4*cm, 2*cm, stroke=1, fill=0)
         p.setFont("Helvetica-Bold", 10)
@@ -1538,7 +1538,7 @@ class CertificateDownloadView(APIView):
         p.drawCentredString(width - 4*cm, 3.8*cm, "CERTIFIED")
 
         # 9. Signatures (Bottom Left)
-        p.setStrokeColor(colors.Black)
+        p.setStrokeColor(colors.black)
         p.setLineWidth(1)
         p.line(4*cm, 4*cm, 10*cm, 4*cm)
         p.setFont("Courier-BoldOblique", 12)
