@@ -1593,18 +1593,23 @@ class CertificateDownloadView(APIView):
         p.drawCentredString(width - 3.75*cm, badge_y - 0.45*cm, f"SKILL LEVEL: {user.level or 'PRO'}")
         p.restoreState()
 
-        # 9. Luxury Gold Seal (Bottom Right - FIXED TYPO)
-        seal_x, seal_y = width - 5*cm, 5.5*cm
+        # 9. Luxury Gold Seal (Bottom Right - FIXED CONTRAST)
+        seal_x, seal_y = width - 5.5*cm, 5.5*cm
         p.setStrokeColor(GOLD)
         p.setLineWidth(2)
-        p.circle(seal_x, seal_y, 2.5*cm, stroke=1, fill=0) # Outer
-        p.circle(seal_x, seal_y, 2.3*cm, stroke=1, fill=0) # Text Ring
-        p.circle(seal_x, seal_y, 1.8*cm, stroke=1, fill=1) # Inner Fill
+        p.circle(seal_x, seal_y, 2.6*cm, stroke=1, fill=0) # Outer
+        p.circle(seal_x, seal_y, 2.4*cm, stroke=1, fill=0) # Text Ring
         
-        draw_circular_text(p, "PYTHON EDITION • CERTIFIED", seal_x, seal_y, 2.05*cm, 160, 9, "Times-Bold", GOLD)
-        draw_circular_text(p, "AUTHENTIC", seal_x, seal_y, 2.05*cm, -120, 9, "Times-Bold", GOLD, reversed=True)
+        # Inner Fill (Navy Background for contrast)
+        p.setFillColor(NAVY)
+        p.circle(seal_x, seal_y, 1.8*cm, stroke=1, fill=1) 
         
-        p.setFillColor(colors.white)
+        # Circular Text (Improved Spacing)
+        draw_circular_text(p, "PYTHON EDITION • CERTIFIED", seal_x, seal_y, 2.12*cm, 160, 9, "Times-Bold", GOLD)
+        draw_circular_text(p, "AUTHENTIC", seal_x, seal_y, 2.12*cm, -120, 9, "Times-Bold", GOLD, reversed=True)
+        
+        # Flipped for visibility (Gold on Navy)
+        p.setFillColor(GOLD)
         p.setFont("Times-Bold", 12)
         p.drawCentredString(seal_x, seal_y - 0.2*cm, "VERIFIED")
 
