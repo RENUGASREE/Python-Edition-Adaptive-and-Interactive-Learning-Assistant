@@ -102,7 +102,15 @@ def setup_production():
             {"name": "Python Pioneer", "description": "Completed the first lesson in Python Edition."},
             {"name": "Quiz Master", "description": "Scored 100% on a module diagnostic quiz."},
             {"name": "Streak Star", "description": "Maintained a 7-day learning streak."},
-            {"name": "Topic Pro", "description": "Reached 'Pro' level in any curriculum topic."}
+            {"name": "Topic Pro", "description": "Reached 'Pro' level in any curriculum topic."},
+            {"name": "Bug Hunter", "description": "Successfully debugged 5 complex Python scripts."},
+            {"name": "Fast Finger", "description": "Completed a coding challenge in under 30 seconds."},
+            {"name": "Deep Diver", "description": "Completed 100% of a module's content and challenges."},
+            {"name": "AI Tinkerer", "description": "Used the AI Tutor to optimize or explain complex logic."},
+            {"name": "Persistent", "description": "Logged in and learned for 7 consecutive days."},
+            {"name": "Syntax Sage", "description": "Passed 5 quizzes without a single syntax error."},
+            {"name": "Algorithm Architect", "description": "Mastered complex nested data structures and logic."},
+            {"name": "Logic Legend", "description": "Completed Advanced sessions with 100% accuracy."}
         ]
         for b_data in badges:
             Badge.objects.get_or_create(name=b_data["name"], defaults={"description": b_data["description"]})
@@ -110,7 +118,10 @@ def setup_production():
         # Certificate Templates
         templates = [
             {"code": "PY-FUND-01", "title": "Python Fundamentals", "description": "Certificate for mastering core Python syntax and logic."},
-            {"code": "DS-ALGO-01", "title": "Data Structures", "description": "Certificate for advanced proficiency in Python data structures."}
+            {"code": "DS-ALGO-01", "title": "Data Structures", "description": "Certificate for advanced proficiency in Python data structures."},
+            {"code": "ADV-PY-01", "title": "Advanced Python Mastery", "description": "Mastery of decorators, generators, and advanced concepts."},
+            {"code": "OOP-PY-01", "title": "Object-Oriented Programming", "description": "Specialization in classes, inheritance, and OOP design."},
+            {"code": "MASTER-PY-01", "title": "Master of Python", "description": "Final course completion certificate for the entire Python Edition curriculum."}
         ]
         for t_data in templates:
             CertificateTemplate.objects.get_or_create(code=t_data["code"], defaults={"title": t_data["title"], "description": t_data["description"]})

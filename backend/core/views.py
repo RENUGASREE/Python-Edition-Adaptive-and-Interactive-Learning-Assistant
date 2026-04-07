@@ -1399,7 +1399,7 @@ class SubmitQuizView(APIView):
         user_id = user.original_uuid or str(user.id)
         quiz_percentage = round((score / total_questions) * 100, 2) if total_questions > 0 else 0
         
-        # Always update progress when quiz is submitted (no minimum score requirement)
+        # Always update progress when quiz is submitted
         progress, _ = UserProgress.objects.get_or_create(user_id=user_id, lesson_id=quiz.lesson_id)
         progress.quiz_completed = True
         progress.score = int(quiz_percentage) if total_questions > 0 else 100
@@ -1411,6 +1411,28 @@ class SubmitQuizView(APIView):
                 progress.completed_at = timezone.now()
         progress.save()
         logger.info(f"Quiz completed for user {user.id}, lesson {quiz.lesson_id}, score: {quiz_percentage}%")
+
+        # --- Module Certificate Award Logic ---
+        # If this was the last requirement for a module, award the certificate
+        module_id = quiz.module_id
+        if module_id and _module_completed(user, module_id):
+            module = Module.objects.filter(id=module_id).first()
+            if module:
+                Certificate.objects.get_or_create(
+                    user=user,
+                    module=module.title,
+                    defaults={"pdf_path": f"/certificate/{module_id}"}
+                )
+                # Check for "Master of Python" (all modules done)
+                total_modules = Module.objects.count()
+                user_certs = Certificate.objects.filter(user=user).exclude(module="Master of Python").count()
+                if user_certs >= total_modules:
+                    Certificate.objects.get_or_create(
+                        user=user,
+                        module="Master of Python",
+                        defaults={"pdf_path": "/certificate/master"}
+                    )
+                    award_badge(user, "Logic Legend")
 
         return Response({
             "score": score,
@@ -1447,45 +1469,90 @@ class CertificateDownloadView(APIView):
 
     def get(self, request, module_id):
         user = request.user
-        module = Module.objects.filter(id=module_id).first()
-        if module:
-            certificate = Certificate.objects.filter(user=user, module=module.title).first()
+        if module_id == "master":
+            certificate = Certificate.objects.filter(user=user, module="Master of Python").first()
         else:
-            certificate = None
+            module = Module.objects.filter(id=module_id).first()
+            if module:
+                certificate = Certificate.objects.filter(user=user, module=module.title).first()
+            else:
+                certificate = None
 
         if not certificate:
-            return Response({"message": "Certificate not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "Certificate not yet earned. Complete the module quiz to unlock!"}, status=status.HTTP_404_NOT_FOUND)
+
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.units import cm
 
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="certificate_{user.username}_{module_id}.pdf"'
 
-        p = canvas.Canvas(response, pagesize=letter)
-        width, height = letter
+        # Use Landscape A4 for a more professional look
+        p = canvas.Canvas(response, pagesize=landscape(A4))
+        width, height = landscape(A4)
 
-        # Certificate content
-        p.setTitle(f"Certificate of Completion - {certificate.module}")
+        # 1. Background Fill (Light parchment)
+        p.setFillColorRGB(0.98, 0.98, 0.95)
+        p.rect(0, 0, width, height, fill=1)
+
+        # 2. Decorative Double Border
+        p.setStrokeColor(colors.MidnightBlue)
+        p.setLineWidth(5)
+        p.rect(1*cm, 1*cm, width-2*cm, height-2*cm)
+        p.setLineWidth(1)
+        p.rect(1.3*cm, 1.3*cm, width-2.6*cm, height-2.6*cm)
+
+        # 3. Main Title
+        p.setFillColor(colors.MidnightBlue)
+        p.setFont("Helvetica-Bold", 40)
+        p.drawCentredString(width / 2.0, height - 5*cm, "Certificate of Achievement")
+
+        # 4. Certification Text
+        p.setFont("Helvetica", 18)
+        p.drawCentredString(width / 2.0, height - 7*cm, "This premium certification is proudly presented to")
+
+        # 5. User Name (Gold / Deep Blue)
+        p.setFont("Helvetica-Bold", 36)
+        p.setFillColorRGB(0.7, 0.5, 0.1) # Gold-ish
+        p.drawCentredString(width / 2.0, height - 9*cm, f"{user.first_name} {user.last_name}")
+
+        # 6. Specific Achievement
+        p.setFillColor(colors.MidnightBlue)
+        p.setFont("Helvetica", 18)
+        p.drawCentredString(width / 2.0, height - 11*cm, "For successfully mastering the specialized curriculum of")
+        
         p.setFont("Helvetica-Bold", 24)
-        p.drawCentredString(width / 2.0, height - 2 * inch, "Certificate of Completion")
+        p.drawCentredString(width / 2.0, height - 12.5*cm, certificate.module)
 
-        p.setFont("Helvetica", 12)
-        p.drawCentredString(width / 2.0, height - 3 * inch, "This certifies that")
+        # 7. Platform Info
+        p.setFont("Helvetica-Oblique", 14)
+        p.drawCentredString(width / 2.0, height - 14*cm, "Python Edition Adaptive Learning Platform")
 
-        p.setFont("Helvetica-Bold", 20)
-        p.drawCentredString(width / 2.0, height - 3.5 * inch, f"{user.first_name} {user.last_name}")
+        # 8. Digital Seal (Bottom Right)
+        p.setStrokeColor(colors.Goldenrod)
+        p.setLineWidth(2)
+        p.circle(width - 4*cm, 4*cm, 2*cm, stroke=1, fill=0)
+        p.setFont("Helvetica-Bold", 10)
+        p.drawCentredString(width - 4*cm, 4.2*cm, "OFFICIAL")
+        p.drawCentredString(width - 4*cm, 3.8*cm, "CERTIFIED")
 
-        p.setFont("Helvetica", 12)
-        p.drawCentredString(width / 2.0, height - 4 * inch, f"has successfully completed the module")
-
-        p.setFont("Helvetica-Bold", 16)
-        p.drawCentredString(width / 2.0, height - 4.5 * inch, certificate.module)
-
+        # 9. Signatures (Bottom Left)
+        p.setStrokeColor(colors.Black)
+        p.setLineWidth(1)
+        p.line(4*cm, 4*cm, 10*cm, 4*cm)
+        p.setFont("Courier-BoldOblique", 12)
+        p.drawString(4.5*cm, 4.2*cm, "Pythonized AI")
         p.setFont("Helvetica", 10)
-        p.drawCentredString(width / 2.0, 2 * inch, f"Issued on: {certificate.issued_at.strftime('%B %d, %Y')}")
-        p.drawCentredString(width / 2.0, 1.5 * inch, f"Certificate ID: {certificate.id}")
+        p.drawString(4*cm, 3.5*cm, "Course Director, Python Edition")
+
+        # 10. Date and ID (Bottom Middle)
+        p.setFont("Helvetica", 10)
+        p.drawCentredString(width / 2.0, 3*cm, f"Issued on: {certificate.issued_at.strftime('%B %d, %Y')}")
+        p.drawCentredString(width / 2.0, 2.5*cm, f"Certificate Hash: {hash(certificate.id)}")
 
         p.showPage()
         p.save()
-
         return response
 
 class AITutorView(APIView):
