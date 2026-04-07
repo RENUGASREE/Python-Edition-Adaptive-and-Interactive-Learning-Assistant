@@ -114,26 +114,29 @@ def generate_ultra_premium_sample():
     p.setFont("Helvetica-Oblique", 14)
     p.drawCentredString(width / 2.0, height - 16*cm, "Python Edition Adaptive Learning Platform")
 
-    # 10. Luxury Gold Seal (Bottom Right - FIXED TYPO)
-    seal_x, seal_y = width - 5*cm, 5.5*cm
+    # 10. Luxury Gold Seal (Bottom Right - FIXED CONTRAST)
+    seal_x, seal_y = width - 5.5*cm, 5.5*cm
     p.setStrokeColor(GOLD)
     p.setLineWidth(2)
-    p.circle(seal_x, seal_y, 2.5*cm, stroke=1, fill=0) # Outer
-    p.circle(seal_x, seal_y, 2.3*cm, stroke=1, fill=0) # Ring
-    p.circle(seal_x, seal_y, 1.8*cm, stroke=1, fill=1) # Inner Fill
+    p.circle(seal_x, seal_y, 2.6*cm, stroke=1, fill=0) # Outer
+    p.circle(seal_x, seal_y, 2.4*cm, stroke=1, fill=0) # Text Ring
     
-    # Top text: PYTHON EDITION • CERTIFIED
-    draw_circular_text(p, "PYTHON EDITION • CERTIFIED", seal_x, seal_y, 2.05*cm, 160, 9, "Times-Bold", GOLD)
+    # Inner Fill (Navy Background for contrast)
+    p.setFillColor(NAVY)
+    p.circle(seal_x, seal_y, 1.8*cm, stroke=1, fill=1) 
     
-    # Bottom text: AUTHENTIC (Flipped upright)
-    draw_circular_text(p, "AUTHENTIC", seal_x, seal_y, 2.05*cm, -120, 9, "Times-Bold", GOLD, reversed=True)
+    # Circular Text (Improved Spacing)
+    draw_circular_text(p, "PYTHON EDITION • CERTIFIED", seal_x, seal_y, 2.12*cm, 160, 9, "Times-Bold", GOLD)
+    draw_circular_text(p, "AUTHENTIC", seal_x, seal_y, 2.12*cm, -120, 9, "Times-Bold", GOLD, reversed=True)
     
-    p.setFillColor(colors.white)
+    # Flipped for visibility (Gold on Navy)
+    p.setFillColor(WHITE)
     p.setFont("Times-Bold", 12)
     p.drawCentredString(seal_x, seal_y - 0.2*cm, "VERIFIED")
 
-    # 11. QR Verification Code (Bottom Center)
-    qr_code = qr.QrCodeWidget('https://pythonedition.vercel.app/verify/cert-uuid-87432190')
+    # 11. QR Verification Code (Bottom Center - REAL TEST)
+    real_uuid = "6791d293-87a8-45e7-9132-ed42e322fc30"
+    qr_code = qr.QrCodeWidget(f'https://pythonedition.vercel.app/verify/{real_uuid}')
     bounds = qr_code.getBounds()
     qr_width, qr_height = bounds[2] - bounds[0], bounds[3] - bounds[1]
     
@@ -145,7 +148,7 @@ def generate_ultra_premium_sample():
     p.setFillColor(NAVY)
     p.setFont("Helvetica", 8)
     p.drawCentredString(width/2, qr_y - 0.4*cm, "Scan to Verify Certificate")
-    p.drawCentredString(width/2, qr_y - 0.9*cm, "ID: PY-CERT-LUX-2026-87432190")
+    p.drawCentredString(width/2, qr_y - 0.9*cm, f"ID: PY-CERT-{real_uuid[:8].upper()}")
 
     # 12. Signature Section (Bottom Left)
     p.setStrokeColor(NAVY)
