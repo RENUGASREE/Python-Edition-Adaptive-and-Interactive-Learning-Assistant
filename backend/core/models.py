@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
@@ -138,6 +139,7 @@ class Certificate(models.Model):
     module = models.CharField(max_length=255)
     pdf_path = models.CharField(max_length=255)
     issued_at = models.DateTimeField(auto_now_add=True)
+    verification_code = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
 
 class CertificateTemplate(models.Model):
     code = models.CharField(max_length=100, unique=True)

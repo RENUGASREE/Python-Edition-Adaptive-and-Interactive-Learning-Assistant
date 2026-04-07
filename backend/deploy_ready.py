@@ -126,6 +126,22 @@ def setup_production():
         for t_data in templates:
             CertificateTemplate.objects.get_or_create(code=t_data["code"], defaults={"title": t_data["title"], "description": t_data["description"]})
         
+        # 5. Sync Existing Certificates (Generate UUIDs if missing)
+        try:
+            from core.models import Certificate
+            import uuid
+            print("📜 Syncing Certificate Verification Codes...")
+            certs_to_update = Certificate.objects.filter(verification_code__isnull=True)
+            if certs_to_update.exists():
+                for cert in certs_to_update:
+                    cert.verification_code = uuid.uuid4()
+                    cert.save()
+                print(f"✅ Synced {certs_to_update.count()} certificates.")
+            else:
+                print("ℹ️ All certificates already have verification codes.")
+        except Exception as e:
+            print(f"❌ Error syncing certificates: {e}")
+
         print("✅ Gamification & Certificates Seeded.")
     except Exception as e:
         print(f"❌ Error seeding gamification/certificates: {e}")

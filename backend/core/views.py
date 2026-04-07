@@ -1491,19 +1491,24 @@ class CertificateDownloadView(APIView):
         from reportlab.graphics.shapes import Drawing
         from reportlab.graphics import renderPDF
 
-        def draw_circular_text(canv, text, x, y, radius, start_angle, font_size, font_name, color):
+        def draw_circular_text(canv, text, x, y, radius, start_angle, font_size, font_name, color, reversed=False):
             canv.saveState()
             canv.setFont(font_name, font_size)
             canv.setFillColor(color)
-            char_angle = 360 / (2 * math.pi * radius) * (font_size * 0.75)
+            char_angle = 360 / (2 * math.pi * radius) * (font_size * 0.8)
             for i, char in enumerate(text):
-                angle = start_angle - (i * char_angle)
+                if reversed:
+                    angle = start_angle + (i * char_angle)
+                    rotation = angle + 90
+                else:
+                    angle = start_angle - (i * char_angle)
+                    rotation = angle - 90
                 rad = math.radians(angle)
                 char_x = x + radius * math.cos(rad)
                 char_y = y + radius * math.sin(rad)
                 canv.saveState()
                 canv.translate(char_x, char_y)
-                canv.rotate(angle - 90)
+                canv.rotate(rotation)
                 canv.drawCentredString(0, 0, char)
                 canv.restoreState()
             canv.restoreState()
@@ -1572,50 +1577,51 @@ class CertificateDownloadView(APIView):
         p.setFont("Helvetica-Oblique", 14)
         p.drawCentredString(width / 2.0, height - 15*cm, "Python Edition Adaptive Learning Platform")
 
-        # 8. AI & Level Badges (Top Right)
+        # 8. AI & Level Badges (Top Right - FIXED)
         p.saveState()
+        badge_y = height - 2.5*cm
         p.setFillColor(NAVY)
         p.setStrokeColor(GOLD)
-        p.rect(width - 6*cm, height - 4.5*cm, 4*cm, 0.8*cm, fill=1)
+        p.rect(width - 5.5*cm, badge_y, 3.5*cm, 0.6*cm, fill=1)
         p.setFillColor(colors.white)
-        p.setFont("Helvetica-Bold", 10)
-        p.drawCentredString(width - 4*cm, height - 4*cm, "AI VERIFIED LEARNING")
+        p.setFont("Helvetica-Bold", 8)
+        p.drawCentredString(width - 3.75*cm, badge_y + 0.15*cm, "AI VERIFIED LEARNING")
         
         p.setFillColor(GOLD)
-        p.rect(width - 6*cm, height - 5.5*cm, 4*cm, 0.8*cm, fill=1)
+        p.rect(width - 5.5*cm, badge_y - 0.6*cm, 3.5*cm, 0.6*cm, fill=1)
         p.setFillColor(colors.black)
-        p.drawCentredString(width - 4*cm, height - 5*cm, f"SKILL LEVEL: {user.level or 'PRO'}")
+        p.drawCentredString(width - 3.75*cm, badge_y - 0.45*cm, f"SKILL LEVEL: {user.level or 'PRO'}")
         p.restoreState()
 
-        # 9. Luxury Gold Seal (Bottom Right)
+        # 9. Luxury Gold Seal (Bottom Right - FIXED TYPO)
         seal_x, seal_y = width - 5*cm, 5.5*cm
         p.setStrokeColor(GOLD)
         p.setLineWidth(2)
         p.circle(seal_x, seal_y, 2.5*cm, stroke=1, fill=0) # Outer
-        p.circle(seal_x, seal_y, 2.3*cm, stroke=1, fill=0) # Ring
+        p.circle(seal_x, seal_y, 2.3*cm, stroke=1, fill=0) # Text Ring
         p.circle(seal_x, seal_y, 1.8*cm, stroke=1, fill=1) # Inner Fill
         
-        draw_circular_text(p, "PYTHON EDITION • CERTIFIED • AUTHENTIC • ", seal_x, seal_y, 2.05*cm, 90, 8, "Times-Bold", GOLD)
+        draw_circular_text(p, "PYTHON EDITION • CERTIFIED", seal_x, seal_y, 2.05*cm, 160, 9, "Times-Bold", GOLD)
+        draw_circular_text(p, "AUTHENTIC", seal_x, seal_y, 2.05*cm, -120, 9, "Times-Bold", GOLD, reversed=True)
         
         p.setFillColor(colors.white)
         p.setFont("Times-Bold", 12)
-        p.drawCentredString(seal_x, seal_y - 0.1*cm, "VERIFIED")
+        p.drawCentredString(seal_x, seal_y - 0.2*cm, "VERIFIED")
 
         # 10. QR Verification Code (Bottom Center)
-        verify_url = f"https://pythonedition.vercel.app/verify/{hash(certificate.id)}"
+        verify_url = f"https://pythonedition.vercel.app/verify/{certificate.verification_code}"
         qr_code = qr.QrCodeWidget(verify_url)
         bounds = qr_code.getBounds()
-        qr_width = bounds[2] - bounds[0]
-        qr_height = bounds[3] - bounds[1]
+        qr_width, qr_height = bounds[2] - bounds[0], bounds[3] - bounds[1]
         d = Drawing(45, 45, transform=[45./qr_width, 0, 0, 45./qr_height, 0, 0])
         d.add(qr_code)
         
-        qr_x, qr_y = width/2 - 22, 3.5*cm
+        qr_x, qr_y = width/2 - 22, 3.2*cm
         renderPDF.draw(d, p, qr_x, qr_y)
         p.setFillColor(NAVY)
         p.setFont("Helvetica", 8)
-        p.drawCentredString(width/2, qr_y - 0.5*cm, "Scan to Verify Certificate")
-        p.drawCentredString(width/2, qr_y - 1.0*cm, f"ID: PY-2026-{abs(hash(certificate.id))}")
+        p.drawCentredString(width/2, qr_y - 0.4*cm, "Scan to Verify Certificate")
+        p.drawCentredString(width/2, qr_y - 0.9*cm, f"ID: PY-CERT-{certificate.verification_code.hex[:8].upper()}")
 
         # 11. Signature Section (Bottom Left)
         p.setStrokeColor(NAVY)
@@ -1633,6 +1639,22 @@ class CertificateDownloadView(APIView):
         p.showPage()
         p.save()
         return response
+
+class CertificateVerifyView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def get(self, request, code):
+        try:
+            cert = Certificate.objects.get(verification_code=code)
+            return Response({
+                "status": "verified",
+                "student": f"{cert.user.first_name} {cert.user.last_name}",
+                "module": cert.module,
+                "issued_at": cert.issued_at.strftime("%B %d, %Y"),
+                "level": cert.user.level or "PRO"
+            })
+        except:
+            return Response({"status": "not_found"}, status=status.HTTP_404_NOT_FOUND)
 
 class AITutorView(APIView):
     permission_classes = [AllowAny]
