@@ -32,6 +32,7 @@ import logging
 import os
 import urllib.request as urlreq
 import urllib.error as urlerr
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -1485,6 +1486,27 @@ class CertificateDownloadView(APIView):
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib.units import cm
         from reportlab.lib.colors import HexColor
+        from reportlab.graphics.barcode import qr
+        from reportlab.graphics.barcode import qr
+        from reportlab.graphics.shapes import Drawing
+        from reportlab.graphics import renderPDF
+
+        def draw_circular_text(canv, text, x, y, radius, start_angle, font_size, font_name, color):
+            canv.saveState()
+            canv.setFont(font_name, font_size)
+            canv.setFillColor(color)
+            char_angle = 360 / (2 * math.pi * radius) * (font_size * 0.75)
+            for i, char in enumerate(text):
+                angle = start_angle - (i * char_angle)
+                rad = math.radians(angle)
+                char_x = x + radius * math.cos(rad)
+                char_y = y + radius * math.sin(rad)
+                canv.saveState()
+                canv.translate(char_x, char_y)
+                canv.rotate(angle - 90)
+                canv.drawCentredString(0, 0, char)
+                canv.restoreState()
+            canv.restoreState()
 
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="certificate_{user.username}_{module_id}.pdf"'
@@ -1550,28 +1572,63 @@ class CertificateDownloadView(APIView):
         p.setFont("Helvetica-Oblique", 14)
         p.drawCentredString(width / 2.0, height - 15*cm, "Python Edition Adaptive Learning Platform")
 
-        # 9. Luxury Digital Seal (Bottom Right)
+        # 8. AI & Level Badges (Top Right)
+        p.saveState()
+        p.setFillColor(NAVY)
+        p.setStrokeColor(GOLD)
+        p.rect(width - 6*cm, height - 4.5*cm, 4*cm, 0.8*cm, fill=1)
+        p.setFillColor(colors.white)
+        p.setFont("Helvetica-Bold", 10)
+        p.drawCentredString(width - 4*cm, height - 4*cm, "AI VERIFIED LEARNING")
+        
+        p.setFillColor(GOLD)
+        p.rect(width - 6*cm, height - 5.5*cm, 4*cm, 0.8*cm, fill=1)
+        p.setFillColor(colors.black)
+        p.drawCentredString(width - 4*cm, height - 5*cm, f"SKILL LEVEL: {user.level or 'PRO'}")
+        p.restoreState()
+
+        # 9. Luxury Gold Seal (Bottom Right)
+        seal_x, seal_y = width - 5*cm, 5.5*cm
         p.setStrokeColor(GOLD)
         p.setLineWidth(2)
-        p.circle(width - 5*cm, 5*cm, 2.2*cm, stroke=1, fill=0)
-        p.circle(width - 5*cm, 5*cm, 2.0*cm, stroke=1, fill=0)
-        p.setFont("Times-Bold", 11)
-        p.drawCentredString(width - 5*cm, 5.2*cm, "OFFICIAL")
-        p.drawCentredString(width - 5*cm, 4.7*cm, "CERTIFIED")
+        p.circle(seal_x, seal_y, 2.5*cm, stroke=1, fill=0) # Outer
+        p.circle(seal_x, seal_y, 2.3*cm, stroke=1, fill=0) # Ring
+        p.circle(seal_x, seal_y, 1.8*cm, stroke=1, fill=1) # Inner Fill
+        
+        draw_circular_text(p, "PYTHON EDITION • CERTIFIED • AUTHENTIC • ", seal_x, seal_y, 2.05*cm, 90, 8, "Times-Bold", GOLD)
+        
+        p.setFillColor(colors.white)
+        p.setFont("Times-Bold", 12)
+        p.drawCentredString(seal_x, seal_y - 0.1*cm, "VERIFIED")
 
-        # 10. Signature Section (Bottom Left)
+        # 10. QR Verification Code (Bottom Center)
+        verify_url = f"https://pythonedition.vercel.app/verify/{hash(certificate.id)}"
+        qr_code = qr.QrCodeWidget(verify_url)
+        bounds = qr_code.getBounds()
+        qr_width = bounds[2] - bounds[0]
+        qr_height = bounds[3] - bounds[1]
+        d = Drawing(45, 45, transform=[45./qr_width, 0, 0, 45./qr_height, 0, 0])
+        d.add(qr_code)
+        
+        qr_x, qr_y = width/2 - 22, 3.5*cm
+        renderPDF.draw(d, p, qr_x, qr_y)
+        p.setFillColor(NAVY)
+        p.setFont("Helvetica", 8)
+        p.drawCentredString(width/2, qr_y - 0.5*cm, "Scan to Verify Certificate")
+        p.drawCentredString(width/2, qr_y - 1.0*cm, f"ID: PY-2026-{abs(hash(certificate.id))}")
+
+        # 11. Signature Section (Bottom Left)
         p.setStrokeColor(NAVY)
         p.setLineWidth(1.2)
-        p.line(3*cm, 5*cm, 10*cm, 5*cm)
+        p.line(3*cm, 5.5*cm, 10*cm, 5.5*cm)
         p.setFont("Courier-BoldOblique", 14)
-        p.drawString(3.5*cm, 5.3*cm, "Pythonized AI")
+        p.drawString(3.5*cm, 5.8*cm, "Pythonized AI")
         p.setFont("Helvetica", 10)
-        p.drawString(3*cm, 4.4*cm, "PLATFORM DIRECTOR, PYTHON EDITION")
+        p.drawString(3*cm, 4.9*cm, "PLATFORM DIRECTOR, PYTHON EDITION")
 
-        # 11. Date and ID (Bottom Middle)
-        p.setFont("Helvetica", 10)
-        p.drawCentredString(width / 2.0, 3*cm, f"Issued on: {certificate.issued_at.strftime('%B %d, %Y')}")
-        p.drawCentredString(width / 2.0, 2.5*cm, f"Certificate Hash: {hash(certificate.id)}")
+        # 12. Date (Bottom Left below sig)
+        p.setFont("Helvetica", 9)
+        p.drawString(3*cm, 4.0*cm, f"Issued on: {certificate.issued_at.strftime('%B %d, %Y')}")
 
         p.showPage()
         p.save()
