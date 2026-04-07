@@ -1525,7 +1525,7 @@ class CertificateDownloadView(APIView):
 
         # 5. Subtitle
         p.setFont("Helvetica", 18)
-        p.drawCentredString(width / 2.0, height - 6.8*cm, "This premium certification is proudly presented to")
+        p.drawCentredString(width / 2.0, height - 6.8*cm, "This certification is proudly presented to")
 
         # 6. Student Name Section (Luxury Gold + Spacing)
         p.setStrokeColor(GOLD)
