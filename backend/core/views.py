@@ -1510,12 +1510,12 @@ class CertificateDownloadView(APIView):
         p.setLineWidth(1.5)
         p.rect(1.5*cm, 1.5*cm, width-3*cm, height-3*cm)
 
-        # 3. Watermark (Subtle "PE" Logo at the top)
+        # 3. Watermark (Subtle "Python Edition" Logo at the top)
         p.saveState()
         p.setFont("Helvetica-Bold", 40)
         p.setFillAlpha(0.1)
         p.setFillColor(NAVY)
-        p.drawCentredString(width / 2.0, height - 3.5*cm, "PE")
+        p.drawCentredString(width / 2.0, height - 3.5*cm, "Python Edition")
         p.restoreState()
 
         # 4. Main Heading (Serif Typography)
