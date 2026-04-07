@@ -1484,69 +1484,91 @@ class CertificateDownloadView(APIView):
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib.units import cm
+        from reportlab.lib.colors import HexColor
 
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="certificate_{user.username}_{module_id}.pdf"'
+
+        # Luxury Color Palette
+        NAVY = HexColor('#0B1F3A')
+        GOLD = HexColor('#C9A646')
+        IVORY = HexColor('#F8F6F2')
 
         # Use Landscape A4 for a more professional look
         p = canvas.Canvas(response, pagesize=landscape(A4))
         width, height = landscape(A4)
 
-        # 1. Background Fill (Light parchment)
-        p.setFillColorRGB(0.98, 0.98, 0.95)
+        # 1. Premium Background Fill (Ivory)
+        p.setFillColor(IVORY)
         p.rect(0, 0, width, height, fill=1)
 
-        # 2. Decorative Double Border
-        p.setStrokeColor(colors.midnightblue)
-        p.setLineWidth(5)
-        p.rect(1*cm, 1*cm, width-2*cm, height-2*cm)
-        p.setLineWidth(1)
-        p.rect(1.3*cm, 1.3*cm, width-2.6*cm, height-2.6*cm)
+        # 2. Luxury Double Border (Navy + Gold)
+        p.setStrokeColor(NAVY)
+        p.setLineWidth(4)
+        p.rect(1.2*cm, 1.2*cm, width-2.4*cm, height-2.4*cm)
+        p.setStrokeColor(GOLD)
+        p.setLineWidth(1.5)
+        p.rect(1.5*cm, 1.5*cm, width-3*cm, height-3*cm)
 
-        # 3. Main Title
-        p.setFillColor(colors.midnightblue)
-        p.setFont("Helvetica-Bold", 40)
-        p.drawCentredString(width / 2.0, height - 5*cm, "Certificate of Achievement")
+        # 3. Watermark (Very light "PE" Logo)
+        p.saveState()
+        p.setFont("Helvetica-Bold", 150)
+        p.setFillAlpha(0.05)
+        p.setFillColor(NAVY)
+        p.drawCentredString(width / 2.0, height / 2.0 - 50, "PE")
+        p.restoreState()
 
-        # 4. Certification Text
+        # 4. Main Heading (Serif Typography)
+        p.setFillColor(NAVY)
+        p.setFont("Times-Bold", 42)
+        p.drawCentredString(width / 2.0, height - 5*cm, "CERTIFICATE OF ACHIEVEMENT")
+
+        # 5. Subtitle
         p.setFont("Helvetica", 18)
-        p.drawCentredString(width / 2.0, height - 7*cm, "This premium certification is proudly presented to")
+        p.drawCentredString(width / 2.0, height - 6.8*cm, "This premium certification is proudly presented to")
 
-        # 5. User Name (Gold / Deep Blue)
-        p.setFont("Helvetica-Bold", 36)
-        p.setFillColorRGB(0.7, 0.5, 0.1) # Gold-ish
-        p.drawCentredString(width / 2.0, height - 9*cm, f"{user.first_name} {user.last_name}")
-
-        # 6. Specific Achievement
-        p.setFillColor(colors.midnightblue)
-        p.setFont("Helvetica", 18)
-        p.drawCentredString(width / 2.0, height - 11*cm, "For successfully mastering the specialized curriculum of")
+        # 6. Student Name Section (Luxury Gold + Spacing)
+        p.setStrokeColor(GOLD)
+        p.setLineWidth(0.8)
+        p.line(width/2 - 10*cm, height - 8.0*cm, width/2 + 10*cm, height - 8.0*cm)
         
-        p.setFont("Helvetica-Bold", 24)
-        p.drawCentredString(width / 2.0, height - 12.5*cm, certificate.module)
+        p.setFont("Times-Bold", 48)
+        p.setFillColor(GOLD)
+        p.drawCentredString(width / 2.0, height - 9.8*cm, f"{user.first_name} {user.last_name}")
 
-        # 7. Platform Info
+        p.line(width/2 - 10*cm, height - 10.5*cm, width/2 + 10*cm, height - 10.5*cm)
+
+        # 7. Specific Achievement
+        p.setFillColor(NAVY)
+        p.setFont("Helvetica", 18)
+        p.drawCentredString(width / 2.0, height - 12*cm, "For successfully mastering the high-fidelity curriculum of")
+        
+        p.setFont("Times-Bold", 26)
+        p.drawCentredString(width / 2.0, height - 13.5*cm, certificate.module)
+
+        # 8. Platform Tagline
         p.setFont("Helvetica-Oblique", 14)
-        p.drawCentredString(width / 2.0, height - 14*cm, "Python Edition Adaptive Learning Platform")
+        p.drawCentredString(width / 2.0, height - 15*cm, "Python Edition Adaptive Learning Platform")
 
-        # 8. Digital Seal (Bottom Right)
-        p.setStrokeColor(colors.goldenrod)
+        # 9. Luxury Digital Seal (Bottom Right)
+        p.setStrokeColor(GOLD)
         p.setLineWidth(2)
-        p.circle(width - 4*cm, 4*cm, 2*cm, stroke=1, fill=0)
-        p.setFont("Helvetica-Bold", 10)
-        p.drawCentredString(width - 4*cm, 4.2*cm, "OFFICIAL")
-        p.drawCentredString(width - 4*cm, 3.8*cm, "CERTIFIED")
+        p.circle(width - 5*cm, 5*cm, 2.2*cm, stroke=1, fill=0)
+        p.circle(width - 5*cm, 5*cm, 2.0*cm, stroke=1, fill=0)
+        p.setFont("Times-Bold", 11)
+        p.drawCentredString(width - 5*cm, 5.2*cm, "OFFICIAL")
+        p.drawCentredString(width - 5*cm, 4.7*cm, "CERTIFIED")
 
-        # 9. Signatures (Bottom Left)
-        p.setStrokeColor(colors.black)
-        p.setLineWidth(1)
-        p.line(4*cm, 4*cm, 10*cm, 4*cm)
-        p.setFont("Courier-BoldOblique", 12)
-        p.drawString(4.5*cm, 4.2*cm, "Pythonized AI")
+        # 10. Signature Section (Bottom Left)
+        p.setStrokeColor(NAVY)
+        p.setLineWidth(1.2)
+        p.line(3*cm, 5*cm, 10*cm, 5*cm)
+        p.setFont("Courier-BoldOblique", 14)
+        p.drawString(3.5*cm, 5.3*cm, "Pythonized AI")
         p.setFont("Helvetica", 10)
-        p.drawString(4*cm, 3.5*cm, "Course Director, Python Edition")
+        p.drawString(3*cm, 4.4*cm, "PLATFORM DIRECTOR, PYTHON EDITION")
 
-        # 10. Date and ID (Bottom Middle)
+        # 11. Date and ID (Bottom Middle)
         p.setFont("Helvetica", 10)
         p.drawCentredString(width / 2.0, 3*cm, f"Issued on: {certificate.issued_at.strftime('%B %d, %Y')}")
         p.drawCentredString(width / 2.0, 2.5*cm, f"Certificate Hash: {hash(certificate.id)}")
