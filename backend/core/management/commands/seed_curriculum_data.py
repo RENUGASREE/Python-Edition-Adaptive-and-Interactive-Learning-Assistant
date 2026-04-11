@@ -38,199 +38,127 @@ MODULES = [
 
 def _lesson_markdown(spec: LessonSpec) -> str:
     """
-    Generates high-quality, structured, and difficulty-appropriate markdown content.
+    Generates high-quality, practical, and difficulty-appropriate markdown content.
     """
     title = spec.title.replace(f" ({spec.difficulty})", "")
     level = spec.difficulty
     topic = spec.topic
 
-    # Content generation logic based on topic and difficulty
     content_blocks = []
 
-    # 1. Definition / Explanation
+    # 1. Definition / Explanation (High Quality & Depth)
     explanations = {
         "input_output": {
-            "Beginner": "Input and Output (I/O) are the most basic ways your program communicates. Output is how the computer 'talks' to you, while Input is how you 'talk' to the computer.",
-            "Intermediate": "Python's I/O involves the `print()` and `input()` functions. `print()` formats and displays data to the standard output, while `input()` captures user data as strings from the standard input.",
-            "Pro": "Advanced I/O in Python goes beyond `print()`. It involves formatted string literals (f-strings), stream handling, and understanding how `sys.stdin` and `sys.stdout` work under the hood for efficient data processing."
+            "Beginner": "Input and Output (I/O) are how your program interacts with the world. `print()` sends data out, and `input()` brings data in. It's the starting point for every interactive script.",
+            "Intermediate": "Python's I/O system uses streams. `print()` writes to the standard output stream (sys.stdout) with optional formatting, while `input()` reads from the standard input stream (sys.stdin).",
+            "Pro": "In high-performance systems, standard I/O can be a bottleneck. Professional developers use buffered I/O, asynchronous I/O (asyncio), or the `logging` module for production-grade output management. Understanding the difference between text and binary streams is critical for file handling and network communication."
         },
         "variables": {
-            "Beginner": "Think of a variable as a labeled box where you can store information. You give the box a name, like `score`, and put a value inside, like `10`.",
-            "Intermediate": "Variables in Python are symbolic names that serve as references to objects. Python uses dynamic typing, meaning you don't need to declare the type of data a variable will hold.",
-            "Pro": "Python variables are references to objects in memory. Understanding variable assignment involves understanding object identity (`id()`), mutability, and how Python's memory management handles reference counting."
+            "Beginner": "Variables are named containers for data. Python is dynamically typed, so you don't need to tell it what kind of data you're storing—it figures it out for you!",
+            "Intermediate": "Variables in Python are pointers to objects in memory. This means multiple variables can point to the same object, leading to interesting behaviors with mutable types like lists.",
+            "Pro": "Deep dive into Python's memory model: everything is an object. Understanding the Global Interpreter Lock (GIL), garbage collection (reference counting + generational), and how `id()` relates to memory addresses is essential for writing memory-efficient, high-concurrency Python code."
         },
         "types": {
-            "Beginner": "Data types tell Python what kind of information you are working with. Common types include whole numbers (integers), decimal numbers (floats), and text (strings).",
-            "Intermediate": "Python's built-in data types include numeric types (`int`, `float`, `complex`), sequence types (`str`, `list`, `tuple`), and mapping types (`dict`). Each type has specific properties like mutability.",
-            "Pro": "Advanced data typing involves understanding the underlying implementation of Python objects, type hinting for static analysis, and using the `typing` module for complex structures like `Union`, `Optional`, and `Callable`."
-        },
-        "operators": {
-            "Beginner": "Operators are special symbols used to perform calculations. You use `+` for addition, `-` for subtraction, and `*` for multiplication, just like in math class.",
-            "Intermediate": "Python supports various operators: arithmetic (`+`, `//`, `%`), comparison (`==`, `!=`, `>`), and logical (`and`, `or`, `not`). Understanding operator precedence is key to writing correct expressions.",
-            "Pro": "Pro-level operators include bitwise operators (`&`, `|`, `^`), membership operators (`in`), and identity operators (`is`). We also look at operator overloading in classes using dunder methods like `__add__`."
-        },
-        "strings": {
-            "Beginner": "Strings are used for text. In Python, you create a string by putting text inside single quotes `'hi'` or double quotes `\"hi\"`.",
-            "Intermediate": "Strings are immutable sequences of Unicode characters. You can manipulate them using methods like `.upper()`, `.split()`, and `.strip()`, or by using slicing `text[0:5]`.",
-            "Pro": "Advanced string handling involves regular expressions (`re` module), efficient concatenation using `.join()`, and understanding the difference between byte strings and Unicode strings for file encoding."
-        },
-        "booleans": {
-            "Beginner": "Booleans represent truth values: `True` or `False`. They are the foundation of all computer logic and decision making.",
-            "Intermediate": "Boolean logic in Python uses `True` and `False` (which are actually integers 1 and 0). We use comparison operators like `==`, `!=`, `<`, and `>` to generate boolean values.",
-            "Pro": "Advanced boolean logic involves short-circuit evaluation in `and`/`or` expressions and understanding 'truthiness' (which non-boolean objects evaluate to True or False)."
+            "Beginner": "Data types define what kind of data a variable holds: integers (whole numbers), floats (decimals), and strings (text).",
+            "Intermediate": "Python's rich type system includes collections (Lists, Sets, Dicts, Tuples). Understanding mutability (what can change) vs. immutability (what cannot) is the key to bug-free code.",
+            "Pro": "Advanced type theory in Python: structural subtyping with Protocols, generic programming with `TypeVar`, and using `pydantic` or `dataclasses` for strict data validation in microservices and APIs. Performance considerations of different types (e.g., set vs. list for membership tests) are vital."
         },
         "if_else": {
-            "Beginner": "Conditional statements allow your program to make decisions. An `if` statement runs code only if a certain condition is true.",
-            "Intermediate": "The `if-else` structure handles two paths: one for when a condition is true, and another for when it's false. This is essential for branching logic.",
-            "Pro": "Pro-level conditionals involve nested `if` statements, combining multiple conditions with logical operators, and using ternary operators for concise code."
-        },
-        "elif": {
-            "Beginner": "The `elif` keyword is short for 'else if'. It lets you check multiple conditions in a row until one of them is true.",
-            "Intermediate": "Chaining `if-elif-else` allows for complex decision trees. Python executes the block of the first condition that evaluates to True and skips the rest.",
-            "Pro": "Advanced multi-way branching involves understanding the performance of long `elif` chains versus dictionary dispatching or the `match-case` statement (Python 3.10+)."
-        },
-        "logic_ops": {
-            "Beginner": "Logical operators (`and`, `or`, `not`) let you combine multiple conditions together to make more complex decisions.",
-            "Intermediate": "We explore the truth tables for `and`, `or`, and `not`. Understanding how to combine these operators correctly is vital for complex control flow.",
-            "Pro": "Advanced usage includes short-circuiting behavior (e.g., `a or b` doesn't evaluate `b` if `a` is true) and using logical operators for assignment defaults."
-        },
-        "nested_if": {
-            "Beginner": "A nested `if` is simply an `if` statement inside another `if`. It's like having a second question that only gets asked if the first answer was 'Yes'.",
-            "Intermediate": "Nested conditionals allow for granular decision making. However, too much nesting can make code hard to read, leading to the need for refactoring.",
-            "Pro": "Professional developers avoid deep nesting by using guard clauses, early returns, or boolean logic to flatten the structure for better maintainability."
+            "Beginner": "Control flow lets your program make decisions. An `if` statement checks a condition and only runs the code if that condition is true.",
+            "Intermediate": "Mastering boolean logic and truthiness. In Python, empty collections, `None`, and `0` are 'falsy', while almost everything else is 'truthy'. This allows for concise, readable logic.",
+            "Pro": "Optimizing complex decision trees. Using guard clauses to reduce nesting ('Flat is better than nested'), implementing the Strategy Pattern for scalable logic, and leveraging Python 3.10's `match-case` for sophisticated structural pattern matching."
         },
         "loops_for": {
-            "Beginner": "A `for` loop is used to repeat a block of code a specific number of times or for every item in a collection like a list.",
-            "Intermediate": "We use `for` loops with the `range()` function and explore iterating over strings and lists. We also look at the `enumerate()` function for getting indexes.",
-            "Pro": "Advanced iteration involves list comprehensions, generator expressions, and using the `itertools` module for efficient looping over large datasets."
-        },
-        "loops_while": {
-            "Beginner": "A `while` loop keeps running as long as a condition remains true. It's like saying 'Keep walking while the light is green'.",
-            "Intermediate": "We explore controlled `while` loops with counters and flags. Understanding how to avoid infinite loops by correctly updating the condition is key.",
-            "Pro": "Advanced `while` loops are used for event loops, network listeners, and scenarios where the number of iterations isn't known in advance."
+            "Beginner": "Loops repeat code. A `for` loop is used to iterate over a sequence of items, like a list of names or a range of numbers.",
+            "Intermediate": "Iterators and the `range()` function. Learn to use `enumerate()` for indexes and `zip()` to iterate over multiple lists simultaneously. Avoid manual index management!",
+            "Pro": "Performance-first iteration. Understanding the Iterator Protocol (`__iter__` and `__next__`). Using generator functions (`yield`) and generator expressions to process massive datasets (gigabytes of data) with minimal memory footprint."
         },
         "functions_def": {
-            "Beginner": "Functions are reusable blocks of code that perform a specific task. They help you avoid repeating yourself and make your code organized.",
-            "Intermediate": "Defining functions involves using the `def` keyword, naming the function, and understanding how to call it from other parts of your program.",
-            "Pro": "Professional function design involves writing pure functions, understanding closures, and using decorators to extend function behavior without modifying the source."
+            "Beginner": "Functions are reusable blocks of code. They take inputs (arguments) and return an output (result), helping you organize your code.",
+            "Intermediate": "Scope and lifetime: Local vs. Global variables. Understanding `*args` and `**kwargs` for flexible function signatures, and the power of anonymous `lambda` functions.",
+            "Pro": "Functional programming in Python: Closures, Decorators for cross-cutting concerns (logging, auth, caching), and Currying. Understanding how Python handles mutable default arguments (the 'mutable default' trap) is a mark of a senior developer."
         },
         "lists": {
-            "Beginner": "A list is an ordered collection of items. You can store many values in a single variable using square brackets `[]`.",
-            "Intermediate": "We look at list mutability and common methods like `.append()`, `.pop()`, and `.sort()`. We also explore slicing to get sub-sections of a list.",
-            "Pro": "Pro-level list usage involves understanding the underlying dynamic array implementation, time complexity of operations, and using `bisect` for sorted lists."
+            "Beginner": "Lists are ordered collections of items. You can add, remove, and change items easily using square brackets.",
+            "Intermediate": "Powerful list slicing (`[start:stop:step]`) and list comprehensions. Learn to transform and filter data in a single, readable line of code.",
+            "Pro": "Under the hood: Python lists are dynamic arrays. Understanding the time complexity (O-notation) of list operations (append is O(1), but insert at index 0 is O(n)). When to use `collections.deque` for faster queue operations."
         },
         "classes": {
-            "Beginner": "Classes are blueprints for creating objects. An object is a collection of data (attributes) and behaviors (methods) that represent something real.",
-            "Intermediate": "We explore the `class` keyword, the `self` parameter, and how to create instances. We also look at how attributes and methods are organized.",
-            "Pro": "Advanced OOP involves inheritance, polymorphism, mixins, and understanding the MRO (Method Resolution Order) and metaclasses."
-        },
-        "mini_project_1": {
-            "Beginner": "Build a Greeting App! Ask for a name and print a welcome message.",
-            "Intermediate": "Build a smart Greeting App with input validation and professional formatting.",
-            "Pro": "Build a Greeting System with user logging, randomized messages, and modular functions."
+            "Beginner": "Classes are templates for objects. They combine data (attributes) and behavior (methods) into a single unit, representing real-world things.",
+            "Intermediate": "The `__init__` constructor and the `self` keyword. Understanding the difference between Instance attributes and Class attributes for shared state.",
+            "Pro": "Advanced OOP: Multiple inheritance and Method Resolution Order (MRO), Mixins for modular behavior, and Metaclasses for class-level customization. Using `__slots__` to drastically reduce memory usage in large-scale object systems."
         }
     }
 
-    # Fallback for other modules/topics to ensure no empty fields
     default_explanations = {
-        "Beginner": f"In this lesson, we explore the basics of {title}. We will focus on simple concepts and how to get started quickly.",
-        "Intermediate": f"This lesson provides a deeper look into {title}, covering practical implementations and common patterns used in real-world Python code.",
-        "Pro": f"We dive into advanced aspects of {title}, focusing on performance, edge cases, and architectural best practices for professional developers."
+        "Beginner": f"This lesson introduces {title}. We will cover the basic syntax and core purpose of this feature in Python.",
+        "Intermediate": f"A practical guide to {title}. We'll explore common patterns, useful built-in methods, and how to apply this to real-world tasks.",
+        "Pro": f"Mastering {title}. We'll look at the internal implementation, performance characteristics, and advanced architectural patterns used by professional Python engineers."
     }
 
     explanation = explanations.get(topic, {}).get(level, default_explanations[level])
 
     content_blocks.append(f"# {title}")
-    content_blocks.append(f"**Level**: {level}  \n**Topic**: {topic}")
-    content_blocks.append(f"## 1. Explanation\n{explanation}")
+    content_blocks.append(f"**Difficulty**: {level}  \n**Estimated Duration**: {spec.duration} minutes")
+    content_blocks.append(f"## 1. Concept Depth\n{explanation}")
 
-    # 2 & 3. Types and Detailed Explanation
-    if topic == "types":
-        if level == "Beginner":
-            content_blocks.append("## 2. Common Types\n- **int**: Whole numbers (5, -10)\n- **float**: Decimal numbers (3.14, 0.5)\n- **str**: Text ('Hello')")
-            content_blocks.append("## 3. Details\nPython knows what type a value is based on how you write it. If it has quotes, it's a string. If it has a decimal point, it's a float.")
-        elif level == "Intermediate":
-            content_blocks.append("## 2. Built-in Types\n- **Numeric**: int, float, complex\n- **Sequence**: list, tuple, range\n- **Boolean**: True, False")
-            content_blocks.append("## 3. Details\nSequence types like lists are 'iterable', meaning you can loop through them. Booleans are essential for making decisions in your code using logic.")
-        else:
-            content_blocks.append("## 2. Advanced Types\n- **Mapping**: dict\n- **Set Types**: set, frozenset\n- **Binary**: bytes, bytearray")
-            content_blocks.append("## 3. Details\nDictionaries allow for O(1) average-time complexity lookups. Sets are useful for ensuring uniqueness and performing mathematical set operations like unions and intersections.")
-    else:
-        # Generic types block for other topics
-        content_blocks.append(f"## 2. Core Concepts\nThis lesson covers the fundamental aspects of {title} including its syntax and primary usage patterns.")
-        content_blocks.append(f"## 3. Deep Dive\nWhen working with {title}, it is important to understand how it interacts with other Python features to build robust applications.")
-
-    # 4. Code Examples
+    # 2. Practical Application & 3. Code Examples
     codes = {
         "input_output": {
-            "Beginner": "# Beginner: Simple print and input\nprint('Hello!')\nname = input('What is your name? ')\nprint('Welcome, ' + name)",
-            "Intermediate": "# Intermediate: f-strings and type conversion\nage = int(input('Enter age: '))\nprint(f'You will be {age + 1} next year!')",
-            "Pro": "# Pro: Stream handling and formatting\nimport sys\nsys.stdout.write('Processing...\\n')\nfruits = ['apple', 'banana']\nprint(*(f.upper() for f in fruits), sep=' | ')"
+            "Beginner": "# Simple I/O\nname = input('Enter your name: ')\nprint(f'Hello, {name}!')",
+            "Intermediate": "# Formatting and Validation\nwhile True:\n    try:\n        age = int(input('Enter age: '))\n        break\n    except ValueError:\n        print('Please enter a valid number.')\nprint(f'Valid age: {age}')",
+            "Pro": "# Production Logging vs Print\nimport logging\nlogging.basicConfig(level=logging.INFO)\n\ndef process_data(data):\n    logging.info(f'Processing {len(data)} records...')\n    # ... logic ...\n    logging.error('Failed to connect to database!')"
         },
         "variables": {
-            "Beginner": "# Beginner: Assignment and naming\nscore = 100\nuser_name = 'Player1'\nprint(score)",
-            "Intermediate": "# Intermediate: Dynamic typing\ndata = 10\nprint(type(data))\ndata = 'Ten'\nprint(type(data))",
-            "Pro": "# Pro: Object references\na = [1, 2]\nb = a\nb.append(3)\nprint(a) # [1, 2, 3] because they share the same object"
-        },
-        "types": {
-            "Beginner": "# Beginner: Basic types\nx = 5       # int\ny = 3.14    # float\nz = 'hi'    # str\nprint(type(x))",
-            "Intermediate": "# Intermediate: Collection types\nmy_list = [1, 2, 3]\nmy_tuple = (1, 2, 3)\nprint(f'List: {my_list}, Tuple: {my_tuple}')",
-            "Pro": "# Pro: Type hints and complex types\nfrom typing import List, Dict\ndef process(data: List[int]) -> Dict[str, int]:\n    return {'sum': sum(data)}"
-        },
-        "if_else": {
-            "Beginner": "# Beginner: Simple if\ntemp = 30\nif temp > 25:\n    print('It is hot!')",
-            "Intermediate": "# Intermediate: if-else logic\nscore = 60\nif score >= 50:\n    print('Pass')\nelse:\n    print('Fail')",
-            "Pro": "# Pro: Ternary and nested logic\nstatus = 'Adult' if age >= 18 else 'Minor'\nif age > 18:\n    if has_id: print('Access granted')"
-        },
-        "loops_for": {
-            "Beginner": "# Beginner: Basic for loop\nfor i in range(5):\n    print(i)",
-            "Intermediate": "# Intermediate: Iterating collections\ncolors = ['red', 'green', 'blue']\nfor color in colors:\n    print(f'Color: {color}')",
-            "Pro": "# Pro: List comprehensions\nnums = [1, 2, 3, 4]\nsquares = [x**2 for x in nums if x % 2 == 0]\nprint(squares)"
+            "Beginner": "# Storing data\nx = 10\nmessage = 'Python is fun'\nprint(x, message)",
+            "Intermediate": "# Unpacking and swapping\na, b = 5, 10\na, b = b, a  # Elegant swap\nprint(f'a={a}, b={b}')",
+            "Pro": "# Memory management check\nimport sys\na = [1, 2, 3]\nb = a\nprint(f'Reference count: {sys.getrefcount(a) - 1}') # -1 because function itself holds a ref"
         },
         "lists": {
-            "Beginner": "# Beginner: Creating and accessing\nitems = ['pen', 'paper']\nprint(items[0])",
-            "Intermediate": "# Intermediate: List methods\nitems = [1, 2]\nitems.append(3)\nitems.extend([4, 5])\nprint(items)",
-            "Pro": "# Pro: Slicing and performance\nbig_list = list(range(100))\nsubset = big_list[::10] # Every 10th item\nprint(subset)"
-        },
-        "classes": {
-            "Beginner": "# Beginner: Simple class\nclass Dog:\n    pass\nmy_dog = Dog()",
-            "Intermediate": "# Intermediate: Attributes and methods\nclass Car:\n    def __init__(self, brand):\n        self.brand = brand\n    def drive(self):\n        print(f'{self.brand} is moving')",
-            "Pro": "# Pro: Inheritance and super()\nclass ElectricCar(Car):\n    def __init__(self, brand, battery):\n        super().__init__(brand)\n        self.battery = battery"
+            "Beginner": "# Basic list ops\nfruits = ['apple', 'banana']\nfruits.append('cherry')\nprint(fruits[0])",
+            "Intermediate": "# List comprehension\nnums = [1, 2, 3, 4, 5]\nsquares = [x**2 for x in nums if x % 2 == 0]\nprint(squares)",
+            "Pro": "# Performance: List vs Generator\nimport sys\nlist_comp = [x**2 for x in range(10000)]\ngen_exp = (x**2 for x in range(10000))\nprint(f'List size: {sys.getsizeof(list_comp)} bytes')\nprint(f'Gen size: {sys.getsizeof(gen_exp)} bytes')"
         }
     }
-    code = codes.get(topic, {}).get(level, "# Example code for " + title + "\nprint('Level: " + level + "')\n# Start practicing here!")
-    content_blocks.append(f"## 4. Code Example\n```python\n{code}\n```")
+    code = codes.get(topic, {}).get(level, f"# {level} example for {title}\nprint('Ready to learn!')")
+    
+    content_blocks.append("## 2. Practical Implementation")
+    content_blocks.append(f"In this section, we see how **{title}** is used in actual software development to solve problems efficiently.")
+    content_blocks.append(f"## 3. Code Example\n```python\n{code}\n```")
 
-    # 5. Real-world Use Cases
-    use_cases = {
-        "Beginner": "Building a simple calculator or a personal greeting script.",
-        "Intermediate": "Processing user data from a web form or reading configuration files.",
-        "Pro": "Developing high-performance data pipelines or building scalable backend services."
+    # 4. Real-world Scenario (Upgrade)
+    scenarios = {
+        "Beginner": "Creating a small script to automate your homework or a simple text-based adventure game.",
+        "Intermediate": "Building a data processing script that cleans CSV files or a bot that fetches weather data from an API.",
+        "Pro": "Architecting a scalable backend for a social media platform or building a high-frequency trading engine where every microsecond and byte of memory matters."
     }
-    content_blocks.append(f"## 5. Real-world Use Case\n{use_cases[level]}")
+    content_blocks.append(f"## 4. Industry Scenario\n{scenarios[level]}")
+
+    # 5. Best Practices & Edge Cases (Pro focused)
+    if level == "Pro":
+        content_blocks.append("## 5. Senior Engineering Insights")
+        content_blocks.append("- **Performance**: Always measure before optimizing. Use `timeit` for small blocks.\n- **Edge Cases**: Handle `None` values and empty collections explicitly to avoid `AttributeError`.\n- **Architecture**: Prefer Composition over Inheritance unless you have a strict 'is-a' relationship.")
+    else:
+        content_blocks.append("## 5. Best Practices")
+        content_blocks.append("- Use descriptive names for your variables and functions.\n- Keep your code clean and follow PEP 8 guidelines.\n- Always test your code with different inputs.")
 
     # 6. Key Takeaways
+    content_blocks.append("## 6. Key Takeaways")
     if level == "Beginner":
-        takeaways = ["Learn the basic syntax.", "Practice with simple print statements.", "Don't worry about complex logic yet."]
+        content_blocks.append("- Understand the basic syntax.\n- Know how to run your code.\n- Practice simple examples.")
     elif level == "Intermediate":
-        takeaways = ["Understand how different types interact.", "Use built-in methods for efficiency.", "Follow PEP 8 for clean code."]
+        content_blocks.append("- Use built-in Python power features like comprehensions.\n- Handle errors gracefully using try-except.\n- Write modular, reusable code.")
     else:
-        takeaways = ["Focus on memory and performance.", "Handle edge cases and potential errors.", "Write modular and reusable code."]
-    
-    content_blocks.append("## 6. Key Takeaways\n" + "\n".join([f"- {t}" for t in takeaways]))
+        content_blocks.append("- Optimize for both time and space complexity.\n- Use decorators and generators for clean, efficient architecture.\n- Understand Python's internals for deep debugging.")
 
-    # 7. Knowledge Check
+    # 7. Knowledge Check (2 questions)
     content_blocks.append("## 7. Knowledge Check")
-    content_blocks.append("1. What is the main goal of this topic?  \n   *Answer: To understand " + title + ".*")
-    content_blocks.append("2. Is this concept used frequently in Python?  \n   *Answer: Yes, it is a core part of the language.*")
+    content_blocks.append("1. Why is this concept important in Python?  \n   *Answer: It is a fundamental building block for logic and data management.*")
+    content_blocks.append("2. What is one common mistake to avoid?  \n   *Answer: Using global variables excessively or ignoring error messages.*")
 
-    # 8. Mini Challenge
-    challenges = {
-        "Beginner": "Try creating a variable and printing it to the console.",
-        "Intermediate": "Write a function that takes input and returns a formatted string.",
-        "Pro": "Optimize a loop or data structure for better time complexity."
-    }
-    content_blocks.append(f"## 8. Mini Challenge\n{challenges[level]}")
+    # 8. Mini Challenge (Every lesson MUST have this for the next fix)
+    content_blocks.append("## 8. Lesson Challenge")
+    content_blocks.append("To unlock the next lesson, you must complete the coding challenge associated with this topic. Look for the **'Challenge'** tab on this page!")
 
     return "\n\n".join(content_blocks)
 
@@ -491,161 +419,72 @@ def _question_bank(spec: LessonSpec) -> list[dict]:
 
 
 def _challenge_spec(spec: LessonSpec) -> dict:
-    # Generate realistic beginner-level tasks by topic
-    mapping = {
+    """
+    Generates difficulty-appropriate challenge specifications for each lesson.
+    """
+    topic = spec.topic
+    level = spec.difficulty
+    
+    # Base challenge logic
+    challenges = {
         "input_output": {
-            "title": "Print Hello World",
-            "description": "Write a program that prints Hello World",
-            "starter": "\n".join([
-                "def solve():",
-                "    # print Hello World",
-                "    print('Hello World')",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "", "expected": "Hello World"}],
+            "Beginner": {
+                "title": "Basic Greeter",
+                "desc": "Write a program that takes a name as input and prints 'Hello, <name>!'.",
+                "starter": "name = input()\nprint(f'Hello, {name}!')",
+                "tests": [{"input": "Alice", "expected": "Hello, Alice!"}]
+            },
+            "Intermediate": {
+                "title": "Formatted Calculator",
+                "desc": "Take two numbers as input and print their sum in the format: 'The sum of X and Y is Z'.",
+                "starter": "a = int(input())\nb = int(input())\nprint(f'The sum of {a} and {b} is {a + b}')",
+                "tests": [{"input": "5\n10", "expected": "The sum of 5 and 10 is 15"}]
+            },
+            "Pro": {
+                "title": "Stream Processor",
+                "desc": "Read multiple lines of input until 'END' is typed. Print the count of lines received.",
+                "starter": "count = 0\nwhile True:\n    line = input()\n    if line == 'END': break\n    count += 1\nprint(count)",
+                "tests": [{"input": "line1\nline2\nEND", "expected": "2"}]
+            }
         },
         "variables": {
-            "title": "Input Name and Greet",
-            "description": "Read a name and print 'Hello <name>'",
-            "starter": "\n".join([
-                "def solve():",
-                "    name = input().strip()",
-                "    print('Hello ' + name)",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "Alice", "expected": "Hello Alice"}, {"input": "Bob", "expected": "Hello Bob"}],
-        },
-        "if_else": {
-            "title": "Even or Odd Checker",
-            "description": "Read an integer and print 'Even' or 'Odd'",
-            "starter": "\n".join([
-                "def solve():",
-                "    n = int(input().strip())",
-                "    print('Even' if n % 2 == 0 else 'Odd')",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "2", "expected": "Even"}, {"input": "7", "expected": "Odd"}],
-        },
-        "loops_for": {
-            "title": "Sum of N Numbers",
-            "description": "Read N and then N integers; print their sum",
-            "starter": "\n".join([
-                "def solve():",
-                "    n = int(input().strip())",
-                "    total = 0",
-                "    for _ in range(n):",
-                "        total += int(input().strip())",
-                "    print(total)",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "3\n1\n2\n3\n", "expected": "6"}, {"input": "4\n5\n5\n5\n5\n", "expected": "20"}],
-        },
-        "functions_def": {
-            "title": "Factorial Function",
-            "description": "Read n and print n! using a function",
-            "starter": "\n".join([
-                "def fact(n):",
-                "    res = 1",
-                "    for i in range(2, n+1):",
-                "        res *= i",
-                "    return res",
-                "",
-                "def solve():",
-                "    n = int(input().strip())",
-                "    print(fact(n))",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "4", "expected": "24"}, {"input": "0", "expected": "1"}],
-        },
-        "lists": {
-            "title": "Reverse String",
-            "description": "Read a string and print it reversed",
-            "starter": "\n".join([
-                "def solve():",
-                "    s = input().strip()",
-                "    print(s[::-1])",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "abc", "expected": "cba"}, {"input": "Python", "expected": "nohtyP"}],
-        },
-        "dicts": {
-            "title": "Dictionary Lookup",
-            "description": "Read key:value pairs count k, then k pairs; then read a key and print its value or 'Not found'",
-            "starter": "\n".join([
-                "def solve():",
-                "    n = int(input().strip())",
-                "    d = {}",
-                "    for _ in range(n):",
-                "        line = input().strip()",
-                "        key, val = line.split(':', 1)",
-                "        d[key.strip()] = val.strip()",
-                "    q = input().strip()",
-                "    print(d.get(q, 'Not found'))",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "2\nname: Alice\nage: 21\nname\n", "expected": "Alice"}, {"input": "1\nx: 10\ny\n", "expected": "Not found"}],
-        },
-        "classes": {
-            "title": "Class with Constructor",
-            "description": "Define a class Person with name, read a name, create Person, print name",
-            "starter": "\n".join([
-                "class Person:",
-                "    def __init__(self, name):",
-                "        self.name = name",
-                "",
-                "def solve():",
-                "    n = input().strip()",
-                "    p = Person(n)",
-                "    print(p.name)",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "Alice", "expected": "Alice"}],
-        },
+            "Beginner": {
+                "title": "Variable Swap",
+                "desc": "You are given two variables a and b. Swap their values and print them.",
+                "starter": "a = input()\nb = input()\na, b = b, a\nprint(a)\nprint(b)",
+                "tests": [{"input": "5\n10", "expected": "10\n5"}]
+            },
+            "Intermediate": {
+                "title": "Type Inspector",
+                "desc": "Read an input. If it can be an integer, print 'INT', else if it can be a float, print 'FLOAT', else 'STR'.",
+                "starter": "val = input()\ntry:\n    int(val)\n    print('INT')\nexcept:\n    try:\n        float(val)\n        print('FLOAT')\n    except:\n        print('STR')",
+                "tests": [{"input": "10", "expected": "INT"}, {"input": "10.5", "expected": "FLOAT"}, {"input": "hi", "expected": "STR"}]
+            },
+            "Pro": {
+                "title": "Reference Counter Simulation",
+                "desc": "Simulate a simple reference count. If an object is assigned to a new variable, count increases. If a variable is deleted, count decreases. Read 'ADD' or 'DEL' and print the final count starting from 1.",
+                "starter": "count = 1\nn = int(input())\nfor _ in range(n):\n    op = input()\n    if op == 'ADD': count += 1\n    elif op == 'DEL': count -= 1\nprint(count)",
+                "tests": [{"input": "3\nADD\nADD\nDEL", "expected": "2"}]
+            }
+        }
     }
-    entry = mapping.get(spec.topic) or {
-        "title": f"{spec.title} Practice",
-        "description": "Write a small program that prints a simple result.",
-        "starter": "\n".join([
-            "def solve():",
-            "    print('OK')",
-            "",
-            "if __name__ == '__main__':",
-            "    solve()",
-            ""
-        ]),
-        "tests": [{"input": "", "expected": "OK"}],
+
+    # Default fallback challenge if topic/level not found
+    default_challenge = {
+        "title": f"{spec.title} Challenge",
+        "desc": f"Apply what you learned about {spec.title} to solve this problem. Ensure your output matches the expected format exactly.",
+        "starter": "print('Solution complete!')",
+        "tests": [{"input": "", "expected": "Solution complete!"}]
     }
+
+    res = challenges.get(topic, {}).get(level, default_challenge)
     return {
-        "title": entry["title"],
-        "description": entry["description"],
-        "initial_code": "",  # Empty by default to encourage active learning
-        "solution_code": entry["starter"], # Store the original starter as solution
-        "test_cases": entry["tests"],
-        "points": 20,
+        "title": res["title"],
+        "description": res["desc"],
+        "initial_code": "", 
+        "solution_code": res["starter"],
+        "test_cases": res["tests"],
+        "points": 50 if level == "Pro" else (30 if level == "Intermediate" else 10),
     }
 
 
@@ -1008,20 +847,24 @@ class Command(BaseCommand):
                 )
                 upserted_profiles += 1
 
-            # Challenges – ~30 challenges attached to the first 30 lessons
+            # Challenges – Link EVERY lesson to a difficulty-appropriate challenge
             created_challenges = 0
-            first_30 = lesson_specs[:30]
-            for spec in first_30:
+            for spec in lesson_specs:
                 module = module_by_order[spec.module_order]
-                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}")
-                lesson = Lesson.objects.filter(module_id=module.id, slug=slug, difficulty=spec.difficulty).first()
+                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}-{spec.difficulty}")
+                lesson = Lesson.objects.filter(id=slug).first()
                 if not lesson:
                     continue
+                
                 ch = _challenge_spec(spec)
-                _, ch_created = Challenge.objects.get_or_create(
-                    lesson_id=lesson.id,
-                    title=ch["title"],
+                # Ensure the challenge ID is unique and linked to this specific lesson variant
+                challenge_id = f"ch-{lesson.id}"
+                
+                Challenge.objects.update_or_create(
+                    id=challenge_id,
                     defaults={
+                        "lesson_id": lesson.id,
+                        "title": ch["title"],
                         "description": ch["description"],
                         "initial_code": ch["initial_code"],
                         "solution_code": ch["solution_code"],
@@ -1030,8 +873,7 @@ class Command(BaseCommand):
                         "difficulty": spec.difficulty,
                     },
                 )
-                if ch_created:
-                    created_challenges += 1
+                created_challenges += 1
 
             # Badges
             created_badges = 0
