@@ -27,12 +27,12 @@ class LessonSpec:
 
 
 MODULES = [
-    (1, "Python Fundamentals", "Core syntax, variables, types, I/O, and basics to start writing Python confidently."),
-    (2, "Control Flow", "Conditionals and boolean logic to make programs make decisions."),
-    (3, "Loops", "Iteration patterns with for/while loops, range, and loop control."),
-    (4, "Functions", "Reusable functions, parameters, return values, scope, and basic testing."),
-    (5, "Data Structures", "Lists, tuples, sets, dictionaries, and common patterns."),
-    (6, "Object Oriented Programming", "Classes, objects, methods, inheritance, and design thinking."),
+    ("mod-python-basics", 1, "Python Fundamentals", "Core syntax, variables, types, I/O, and basics to start writing Python confidently."),
+    ("mod-control-flow", 2, "Control Flow", "Conditionals and boolean logic to make programs make decisions."),
+    ("mod-loops-iteration", 3, "Loops", "Iteration patterns with for/while loops, range, and loop control."),
+    ("mod-functions", 4, "Functions", "Reusable functions, parameters, return values, scope, and basic testing."),
+    ("mod-data-types", 5, "Data Structures", "Lists, tuples, sets, dictionaries, and common patterns."),
+    ("mod-modules-packages", 6, "Object Oriented Programming", "Classes, objects, methods, inheritance, and design thinking."),
 ]
 
 
@@ -644,7 +644,7 @@ class Command(BaseCommand):
                 from django.db import connection
                 if connection.vendor == 'sqlite':
                     with connection.cursor() as cursor:
-                        tables = ['core_module', 'core_lesson', 'core_quiz', 'core_question', 'core_challenge', 'core_lessonprofile']
+                        tables = ['modules', 'lessons', 'quizzes', 'questions', 'challenges', 'lessons_lessonprofile']
                         for table in tables:
                             try:
                                 cursor.execute(f"DELETE FROM sqlite_sequence WHERE name='{table}'")
@@ -656,7 +656,7 @@ class Command(BaseCommand):
                         cursor.execute("SELECT relname FROM pg_class WHERE relkind = 'S'")
                         sequences = [row[0] for row in cursor.fetchall()]
                         
-                        tables = ['core_module', 'core_lesson', 'core_quiz', 'core_question', 'core_challenge', 'core_lessonprofile']
+                        tables = ['modules', 'lessons', 'quizzes', 'questions', 'challenges', 'lessons_lessonprofile']
                         for table in tables:
                             seq_name = f"{table}_id_seq"
                             if seq_name in sequences:
@@ -668,10 +668,10 @@ class Command(BaseCommand):
             # Modules
             module_by_order: dict[int, Module] = {}
             created_modules = 0
-            for order, title, description in MODULES:
+            for mod_id, order, title, description in MODULES:
                 module, created = Module.objects.get_or_create(
-                    order=order,
-                    defaults={"title": title, "description": description, "image_url": None},
+                    id=mod_id,
+                    defaults={"order": order, "title": title, "description": description, "image_url": None},
                 )
                 if not created:
                     updates = {}
@@ -679,6 +679,8 @@ class Command(BaseCommand):
                         updates["title"] = title
                     if module.description != description:
                         updates["description"] = description
+                    if module.order != order:
+                        updates["order"] = order
                     if updates:
                         for k, v in updates.items():
                             setattr(module, k, v)
