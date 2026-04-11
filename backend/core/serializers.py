@@ -365,28 +365,12 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class SimpleLessonSerializer(serializers.ModelSerializer):
     moduleId = serializers.CharField(source='module_id')
-    topic = serializers.SerializerMethodField()
-    prerequisites = serializers.SerializerMethodField()
-    embeddingVector = serializers.SerializerMethodField()
+    unlocked = serializers.BooleanField(default=False)
+    completed = serializers.BooleanField(default=False)
 
     class Meta:
         model = Lesson
-        fields = ('id', 'moduleId', 'title', 'slug', 'content', 'order', 'difficulty', 'duration', 'topic', 'prerequisites', 'embeddingVector')
-
-    def _profile(self, obj):
-        return LessonProfile.objects.filter(lesson_id=obj.id).first()
-
-    def get_topic(self, obj):
-        profile = self._profile(obj)
-        return normalize_topic(profile.topic) if profile else None
-
-    def get_prerequisites(self, obj):
-        profile = self._profile(obj)
-        return profile.prerequisites if profile else []
-
-    def get_embeddingVector(self, obj):
-        profile = self._profile(obj)
-        return profile.embedding_vector if profile else []
+        fields = ('id', 'moduleId', 'title', 'slug', 'order', 'difficulty', 'duration', 'unlocked', 'completed')
 
 class ModuleSerializer(serializers.ModelSerializer):
     imageUrl = serializers.CharField(source='image_url', required=False)
@@ -503,8 +487,9 @@ class ModuleSerializer(serializers.ModelSerializer):
             from .views import _lesson_unlocked
             is_unlocked = _lesson_unlocked(user, lesson)
             
-            # Use SimpleLessonSerializer if LessonSerializer causes circular issues
-            data = LessonSerializer(lesson, context=self.context).data
+            # Use SimpleLessonSerializer for the module list to keep it lightweight and fast
+            serializer = SimpleLessonSerializer(lesson, context=self.context)
+            data = serializer.data
             data["unlocked"] = is_unlocked
             data["completed"] = lesson.id in completed_ids
             unlocked.append(data)

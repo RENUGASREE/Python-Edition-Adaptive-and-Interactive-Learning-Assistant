@@ -794,17 +794,27 @@ class ModuleViewSet(viewsets.ModelViewSet):
         return context
 
     def get_queryset(self):
-        # Return all modules; serializer controls lesson visibility based on unlocks
-        return self.queryset.order_by("order")
+        return self.queryset
+
+    def list(self, request, *args, **kwargs):
+        try:
+            return super().list(request, *args, **kwargs)
+        except Exception as e:
+            logger.error(f"Error in ModuleViewSet.list: {str(e)}", exc_info=True)
+            return Response({"error": "Internal Server Error", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def retrieve(self, request, *args, **kwargs):
-        module = Module.objects.filter(id=kwargs.get("pk")).first()
-        if not module:
-            return Response({"message": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
-        if not _module_unlocked(request.user, module):
-            return Response({"message": "You need to complete the placement quiz to personalize your learning path."}, status=status.HTTP_403_FORBIDDEN)
-        serializer = self.get_serializer(module)
-        return Response(serializer.data)
+        try:
+            module = Module.objects.filter(id=kwargs.get("pk")).first()
+            if not module:
+                return Response({"message": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
+            if not _module_unlocked(request.user, module):
+                return Response({"message": "You need to complete the placement quiz to personalize your learning path."}, status=status.HTTP_403_FORBIDDEN)
+            serializer = self.get_serializer(module)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error in ModuleViewSet.retrieve: {str(e)}", exc_info=True)
+            return Response({"error": "Internal Server Error", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class LessonViewSet(viewsets.ModelViewSet):
     queryset = Lesson.objects.all().order_by('order')

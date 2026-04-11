@@ -110,31 +110,15 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://pythonedition-.*-ss-projects\.vercel\.app$",
 ]
 
-cors_allow_all = os.getenv("CORS_ALLOW_ALL_ORIGINS", "")
-if cors_allow_all:
-    CORS_ALLOW_ALL_ORIGINS = cors_allow_all.strip().lower() in ("1", "true", "yes")
-else:
-    CORS_ALLOW_ALL_ORIGINS = DEBUG
-
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
-csrf_origins = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
-if csrf_origins:
-    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins.split(",") if origin.strip()]
-elif cors_origins:
-    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
-elif DEBUG:
-    CSRF_TRUSTED_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "https://pythonedition.vercel.app",
-    ]
-else:
-    CSRF_TRUSTED_ORIGINS = [
-        "https://pythonedition.vercel.app",
-        "https://pythonedition-dkte4qfo5-renuga-sree-ss-projects.vercel.app",
-    ]
+CSRF_TRUSTED_ORIGINS = [
+    "https://pythonedition.vercel.app",
+    "https://pythonedition-dkte4qfo5-renuga-sree-ss-projects.vercel.app",
+    "https://*.vercel.app",
+    "https://*.onrender.com",
+]
 
 
 ROOT_URLCONF = 'python_edition_django.urls'
