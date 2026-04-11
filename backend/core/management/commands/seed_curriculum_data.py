@@ -38,126 +38,125 @@ MODULES = [
 
 def _lesson_markdown(spec: LessonSpec) -> str:
     """
-    Generates premium, instructor-level lesson content with high depth and structure.
+    Generates premium, structured lesson content matching the user's requested style.
     """
     title = spec.title.replace(f" ({spec.difficulty})", "")
     level = spec.difficulty
     topic = spec.topic
 
-    # 1. Topic Hook & Storytelling
+    # --- 1. Hook & Introduction ---
     hooks = {
-        "input_output": "Imagine building a robot that can't hear you or speak back. That's a program without I/O. Today, we give your code a voice.",
-        "variables": "In programming, memory is a vast ocean. Variables are the anchors that allow us to find exactly what we need, exactly when we need it.",
-        "types": "A master chef knows the difference between a liquid, a solid, and a gas. In Python, knowing your data types is the secret to a perfect 'recipe'.",
-        "if_else": "Life is full of choices. Should I take an umbrella? Should I press snooze? Your code needs to make these same decisions to be truly smart.",
-        "loops_for": "Efficiency is doing things once and reaping the benefits forever. Loops allow you to automate the mundane so you can focus on the extraordinary.",
-        "functions_def": "Don't repeat yourself. If you've solved a problem once, a function ensures you never have to solve it manually again.",
-        "lists": "A single piece of data is a point; a list is a journey. Learn to manage collections of information like a pro.",
-        "classes": "The world isn't made of strings and integers; it's made of 'Things'. Objects allow us to model reality inside our computers."
+        "input_output": "Input and Output (I/O) are how your program communicates with the outside world. Without them, your code would be a 'silent' box.",
+        "variables": "Variables are used to store data in a program so it can be reused, modified, and accessed later.",
+        "types": "Data types tell Python what kind of information you are working with, ensuring your calculations and logic remain accurate.",
+        "if_else": "Conditional statements allow your program to make decisions, branching its logic based on specific conditions.",
+        "loops_for": "Loops automate repetitive tasks, allowing you to process large amounts of data with just a few lines of code.",
+        "functions_def": "Functions are reusable blocks of logic that make your code modular, organized, and much easier to maintain.",
+        "lists": "Lists are ordered collections that allow you to manage groups of related data in a single, powerful container.",
+        "classes": "Classes are blueprints for creating objects, allowing you to model real-world entities directly in your code."
     }
-    hook = hooks.get(topic, f"Welcome to our deep dive into **{title}**. Today, we bridge the gap between basic syntax and professional mastery.")
+    intro = hooks.get(topic, f"In this lesson, we explore **{title}**, a core pillar of Python development that builds your programming foundation.")
 
-    # 2. Why This Matters
+    # --- 2. Why This Matters ---
     matters = {
-        "input_output": "Without I/O, your software is a black box. User experience (UX) starts with how you handle data entering and leaving your system.",
-        "variables": "Memory management and data persistence are core to software engineering. Variables are the most fundamental unit of state management.",
-        "types": "Type safety and data integrity prevent 90% of production bugs. Understanding how Python handles types is non-negotiable for reliability.",
+        "input_output": "Every interactive program depends on I/O — from simple CLI tools to complex web applications that handle user data.",
+        "variables": "Every program you write depends on storing and updating data — from user input to calculations and system state. Variables are the foundation of all programming logic.",
+        "types": "Data integrity prevents 90% of production bugs. Understanding types is non-negotiable for building reliable, professional software.",
         "if_else": "Logic is the brain of your application. Branching allows for personalization, security checks, and complex business rules.",
-        "loops_for": "Scaling requires automation. Whether processing 10 rows or 10 million, loops are the engine of data processing.",
-        "functions_def": "Modularity makes code maintainable. Functions allow teams to collaborate by creating reusable, testable units of logic.",
-        "lists": "Real-world data is rarely singular. From social media feeds to financial transactions, everything happens in collections.",
-        "classes": "Scalability in large systems depends on Object-Oriented Design. Classes provide the blueprint for building complex, interconnected systems."
+        "loops_for": "Scaling requires automation. Whether processing 10 records or 10 million, loops are the engine of data processing.",
+        "functions_def": "Clean, maintainable code is built on modularity. Functions allow teams to collaborate effectively on large-scale projects.",
+        "lists": "Real-world data is almost always a collection. From social media feeds to transaction history, everything happens in lists.",
+        "classes": "Scalability in large systems depends on Object-Oriented Design. Classes provide the blueprint for that scalability."
     }
-    matter = matters.get(topic, "This concept is a building block for all advanced Python frameworks, from Django to TensorFlow.")
+    matter = matters.get(topic, "This concept is a building block for all advanced Python frameworks and professional software engineering.")
 
-    # 3. Mental Models
+    # --- 3. Concept Explanation (Level-Based) ---
+    explanations = {
+        "variables": {
+            "Beginner": "In Python, a variable is a **name that refers to a value stored in memory**.\n\nUnlike some other languages, Python is **dynamically typed**, which means:\n- You don’t need to declare a type (int, string, etc.)\n- The type is automatically determined at runtime",
+            "Intermediate": "Variables in Python act as **symbolic names** that are references to objects. Python's dynamic typing means the variable itself has no type, but the object it points to does.\n\nKey behaviors:\n- Reassignment changes the reference, not the object itself\n- Multiple names can point to the same memory address",
+            "Pro": "Python variables are entries in a **namespace dictionary**. Understanding the difference between 'name binding' and 'assignment' is critical for optimizing memory and performance.\n\nDeep dive:\n- CPython uses reference counting for memory management\n- The `id()` function reveals the memory address of the object a variable points to"
+        },
+        "input_output": {
+            "Beginner": "I/O is the 'conversation' between the user and the computer. You use `input()` to listen and `print()` to speak.\n\nKey points:\n- `input()` always returns a string\n- `print()` can combine multiple values",
+            "Intermediate": "Python's I/O involves **Standard Streams**. `print()` writes to `sys.stdout` by default, while `input()` reads from `sys.stdin`.\n\nKey patterns:\n- Using f-strings for clean output formatting\n- Casting `input()` to `int` or `float` for calculations",
+            "Pro": "Professional I/O utilizes **Buffered Streams** and asynchronous patterns. In high-load environments, we avoid the overhead of `print()` in favor of the `logging` module or direct stream writes.\n\nConcepts:\n- Standard Error (`sys.stderr`) for fault reporting\n- Non-blocking I/O for scalable network services"
+        }
+    }
+    explanation = explanations.get(topic, {}).get(level, f"We'll explore how **{title}** works in Python, focusing on its syntax, behavior, and best practices for the **{level}** level.")
+
+    # --- 4. Mental Models ---
     models = {
-        "input_output": {
-            "Beginner": "Think of `input()` as a mailbox where users drop letters, and `print()` as a loudspeaker projecting your message to the room.",
-            "Intermediate": "Visualize I/O as a 'Pipe'. Data flows from one end (Source) to the other (Sink). You can filter or transform it as it passes through.",
-            "Pro": "See I/O as a 'Buffer'. In high-load systems, we don't wait for every byte; we collect them in buckets and process them in efficient batches."
-        },
         "variables": {
-            "Beginner": "A variable is like a labeled 'Sticky Note' on a box. You can peel it off and stick it on a different box later.",
-            "Intermediate": "Think of a variable as a 'GPS Coordinate'. It doesn't contain the house (data), it just tells Python exactly where to find it in memory.",
-            "Pro": "Visualize a 'Reference Graph'. Objects are nodes, and variables are arrows. When no arrows point to a node, Python's Garbage Collector reclaims that space."
+            "Beginner": "Think of a variable as a **label attached to a value**, not a box itself. The label can point to different values over time.",
+            "Intermediate": "Think of a variable as a **GPS Coordinate**. It doesn't contain the house (data); it just tells Python exactly where to find it in memory.",
+            "Pro": "Visualize a **Pointer in a Hash Map**. Namespaces are essentially dictionaries where names are keys and memory addresses are values."
         }
     }
-    model = models.get(topic, {}).get(level, f"Think of {title} as a specialized tool in your engineering toolkit—designed for a specific job, but powerful when combined with others.")
+    model = models.get(topic, {}).get(level, f"Think of **{title}** as a specialized tool in your engineering toolkit—designed for a specific job, but powerful when combined with others.")
 
-    # 4. Advanced/Deep Explanations
-    depth = {
-        "Pro": f"At the senior level, **{title}** isn't just about syntax. We look at the CPython implementation, bytecode execution, and how this impacts the Global Interpreter Lock (GIL).",
-        "Intermediate": f"Moving beyond the basics, we explore the Pythonic way to implement **{title}**, focusing on readability (PEP 8) and standard library utilities.",
-        "Beginner": f"We'll start with the 'How' and 'Why' of **{title}**, ensuring you have a solid foundation before we build more complex logic."
-    }
-
-    # Construct the final Markdown
-    content_blocks = [
-        f"# {title}",
-        f"> {hook}",
-        f"## 🚀 Why This Matters\n{matter}",
-        f"## 🧠 Concept Explanation\n{depth[level]}\n\n{model}",
-        "## 💡 Mental Model",
-        f"*{model}*",
-        "## 🧪 Code Example",
-    ]
-
-    # Level-specific code (High Quality)
+    # --- 5. Code Examples ---
     codes = {
-        "input_output": {
-            "Beginner": "# Getting user input simply\nuser_name = input('What is your name? ')\nprint(f'Hello, {user_name}! Welcome to Python.')",
-            "Intermediate": "# Robust I/O with validation\ndef get_age():\n    while True:\n        try:\n            return int(input('Enter age: '))\n        except ValueError:\n            print('Error: Please enter a numeric value.')\n\nage = get_age()\nprint(f'Age recorded: {age}')",
-            "Pro": "# High-performance stream handling\nimport sys\nfrom io import StringIO\n\ndef fast_process(data_stream):\n    # Using buffers for efficiency in large data processing\n    buffer = StringIO(data_stream)\n    for line in buffer:\n        sys.stdout.write(f'[LOG] {line.strip()}\\n')"
-        },
         "variables": {
-            "Beginner": "# Simple assignment\nscore = 0\nscore = score + 10\nprint(score)  # Output: 10",
-            "Intermediate": "# Tuple unpacking and multiple assignment\nx, y, z = 1, 2, 3\nx, y = y, x  # The Pythonic swap\nprint(f'x: {x}, y: {y}')",
-            "Pro": "# Deep vs Shallow copy behavior\nimport copy\noriginal = [[1, 2, 3], [4, 5, 6]]\nshallow = copy.copy(original)\ndeep = copy.deepcopy(original)\n\noriginal[0][0] = 'CHANGED'\nprint(f'Shallow reflects change: {shallow[0][0]}')\nprint(f'Deep stays isolated: {deep[0][0]}')"
+            "Beginner": "score = 0          # Assign initial value\nscore = score + 10 # Update value\nprint(score)       # Output: 10",
+            "Intermediate": "a, b = 5, 10      # Multiple assignment\na, b = b, a      # The Pythonic swap\nprint(f'a={a}, b={b}') # Output: a=10, b=5",
+            "Pro": "import sys\nx = [1, 2, 3]\ny = x\nprint(id(x) == id(y)) # True (same object)\nprint(sys.getrefcount(x)) # View internal reference count"
         }
     }
-    code = codes.get(topic, {}).get(level, f"# Example for {title}\nprint('Mastering {level} concepts...')")
-    content_blocks.append(f"```python\n{code}\n```")
+    code = codes.get(topic, {}).get(level, f"# {level} example for {title}\nprint('Learning {title}...')")
 
-    # 5. Real-World Applications
+    # --- 6. Real-World Applications ---
     apps = {
-        "Beginner": "Building a personal budget tracker or a simple 'Choose Your Own Adventure' game.",
-        "Intermediate": "Developing a web scraper that cleans data or a Discord bot that responds to user commands.",
-        "Pro": "Optimizing a financial trading algorithm or architecting a microservice that handles millions of requests per second."
+        "Beginner": "Creating a simple calculator or a personal greeting script.",
+        "Intermediate": "Developing a web scraper that cleans data or a Discord bot.",
+        "Pro": "Optimizing financial algorithms or architecting high-traffic microservices."
     }
-    content_blocks.append(f"## 🌍 Real-World Application\n{apps[level]}")
+    app = apps.get(level, "Building robust, scalable Python applications.")
 
-    # 6. Common Mistakes & Best Practices
-    mistakes = {
-        "Beginner": "- **Mistake**: Forgetting quotes around strings.\n- **Fix**: Always use `'text'` or `\"text\"`.",
-        "Intermediate": "- **Mistake**: Using global variables for everything.\n- **Fix**: Use function arguments and return values to pass data.",
-        "Pro": "- **Mistake**: Ignoring memory overhead in large loops.\n- **Fix**: Use generators (`yield`) instead of large lists where possible."
-    }
-    content_blocks.append(f"## ⚠️ Common Mistakes\n{mistakes[level]}")
+    # --- Final Construction ---
+    markdown = f"""
+# {title}
 
-    content_blocks.append("## ✅ Best Practices")
-    if level == "Pro":
-        content_blocks.append("- **Clean Architecture**: Follow SOLID principles.\n- **Performance**: Use `cProfile` to find bottlenecks before optimizing.\n- **Testing**: Write unit tests for every edge case.")
-    else:
-        content_blocks.append("- Use descriptive, snake_case variable names.\n- Add comments to explain *why* you are doing something, not *what*.\n- Keep your code blocks small and focused.")
+{intro}
 
-    # 7. Mini Challenge & Knowledge Check
-    content_blocks.append("## 🏆 Mini Challenge")
-    content_blocks.append(f"Can you apply **{title}** to a new scenario? Head over to the **Challenge** tab to test your skills against our automated test suite!")
+🚀 **Why This Matters**
+{matter}
 
-    content_blocks.append("## 📝 Knowledge Check")
-    content_blocks.append("1. What is the core purpose of this concept in a professional environment?")
-    content_blocks.append("2. How does this feature behave differently as your data scales?")
+🧠 **Concept Explanation**
+{explanation}
 
-    # 8. Pro Tip
-    tips = {
-        "Beginner": "Python is readable like English. If your code feels hard to read, there's probably a simpler way to write it!",
-        "Intermediate": "Use the `help()` and `dir()` functions in the Python console to explore any object or module on the fly.",
-        "Pro": "Premature optimization is the root of all evil. Focus on clear, correct code first, then use profilers to find where speed actually matters."
-    }
-    content_blocks.append(f"## 💡 Pro Tip\n{tips[level]}")
+💡 **Mental Model**
+{model}
 
-    return "\n\n".join(content_blocks)
+🧪 **Code Example**
+```python
+{code}
+```
+
+🌍 **Real-World Application**
+{app}
+
+⚠️ **Common Mistakes**
+- { "Forgetting to update the variable value" if level == "Beginner" else "Using global variables unnecessarily" if level == "Intermediate" else "Ignoring memory overhead in large data structures" }
+- { "Using incorrect naming conventions" if level == "Beginner" else "Not handling edge cases in input" if level == "Intermediate" else "Ignoring the Global Interpreter Lock (GIL) limitations" }
+
+✅ **Best Practices**
+- Use descriptive, **snake_case** names.
+- Keep functions small and focused.
+- { "Add helpful comments" if level == "Beginner" else "Follow PEP 8 guidelines" if level == "Intermediate" else "Write unit tests for core logic" }
+
+🏆 **Mini Challenge**
+Head over to the **Challenge** tab to apply these concepts in our interactive code editor!
+
+📝 **Knowledge Check**
+1. How does Python handle the data type of a variable?
+2. What happens to the memory when a variable is reassigned?
+
+💡 **Pro Tip**
+{ "Python is readable like English—keep it simple!" if level == "Beginner" else "Use `help()` to explore any object's methods." if level == "Intermediate" else "Use `__slots__` to save memory in classes with many instances." }
+"""
+    return markdown.strip()
+
 
 
 def _question_bank(spec: LessonSpec) -> list[dict]:
