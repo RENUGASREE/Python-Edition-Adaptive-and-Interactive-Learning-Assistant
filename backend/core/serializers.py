@@ -222,7 +222,7 @@ class QuizSerializer(serializers.ModelSerializer):
         return QuestionSerializer(questions, many=True).data
 
 class ChallengeSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(read_only=True) # Table challenges uses serial ID
+    id = serializers.CharField(read_only=True)
     lessonId = serializers.CharField(source='lesson_id')
     initialCode = serializers.CharField(source='initial_code')
     solutionCode = serializers.CharField(source='solution_code', required=False)

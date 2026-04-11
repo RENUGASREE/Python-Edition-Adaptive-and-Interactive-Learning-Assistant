@@ -101,11 +101,13 @@ elif DEBUG:
 else:
     CORS_ALLOWED_ORIGINS = [
         "https://pythonedition.vercel.app",
+        "https://pythonedition-dkte4qfo5-renuga-sree-ss-projects.vercel.app",
     ]
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.onrender\.com$",
     r"^https://.*\.vercel\.app$",
+    r"^https://pythonedition-.*-ss-projects\.vercel\.app$",
 ]
 
 cors_allow_all = os.getenv("CORS_ALLOW_ALL_ORIGINS", "")
@@ -131,6 +133,7 @@ elif DEBUG:
 else:
     CSRF_TRUSTED_ORIGINS = [
         "https://pythonedition.vercel.app",
+        "https://pythonedition-dkte4qfo5-renuga-sree-ss-projects.vercel.app",
     ]
 
 
