@@ -597,7 +597,14 @@ def _build_specs() -> list[LessonSpec]:
     specs: list[LessonSpec] = []
     for module_order, lessons in module_topics.items():
         for idx, (title, topic) in enumerate(lessons, start=1):
-            specs.append(LessonSpec(module_order=module_order, lesson_order=idx, title=title, topic=topic))
+            for diff in ["Beginner", "Intermediate", "Pro"]:
+                specs.append(LessonSpec(
+                    module_order=module_order, 
+                    lesson_order=idx, 
+                    title=f"{title} ({diff})", 
+                    topic=topic, 
+                    difficulty=diff
+                ))
     return specs
 
 
@@ -741,10 +748,12 @@ class Command(BaseCommand):
             ]
 
             for c_data in standalone_challenges:
-                Challenge.objects.get_or_create(
-                    lesson_id=-1, # Standalone
-                    title=c_data["title"],
+                c_id = f"standalone-{slugify(c_data['title'])}"
+                Challenge.objects.update_or_create(
+                    id=c_id,
                     defaults={
+                        "lesson_id": "-1", # Standalone
+                        "title": c_data["title"],
                         "description": c_data["desc"],
                         "initial_code": "",
                         "solution_code": c_data["sol"],
@@ -781,16 +790,17 @@ class Command(BaseCommand):
             # Index existing for quick lookup
             for spec in lesson_specs:
                 module = module_by_order[spec.module_order]
-                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}")
-                lesson, created = Lesson.objects.get_or_create(
-                    module_id=module.id,
-                    slug=slug,
-                    difficulty=spec.difficulty,
+                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}-{spec.difficulty}")
+                lesson, created = Lesson.objects.update_or_create(
+                    id=slug,
                     defaults={
+                        "module_id": module.id,
                         "title": spec.title,
+                        "slug": slug,
                         "content": _lesson_markdown(spec),
                         "order": spec.lesson_order,
                         "duration": spec.duration,
+                        "difficulty": spec.difficulty,
                     },
                 )
                 if not created:
@@ -821,7 +831,10 @@ class Command(BaseCommand):
 
                 # Quiz (1 per lesson)
                 quiz_title = f"{spec.title} Quiz"
-                quiz, q_created = Quiz.objects.get_or_create(lesson_id=lesson.id, defaults={"title": quiz_title})
+                quiz, q_created = Quiz.objects.update_or_create(
+                    id=f"quiz-{lesson.id}",
+                    defaults={"lesson_id": lesson.id, "title": quiz_title}
+                )
                 if q_created:
                     created_quizzes += 1
                 else:
@@ -834,8 +847,9 @@ class Command(BaseCommand):
                 existing_count = Question.objects.filter(quiz_id=quiz.id).count()
                 if existing_count != len(desired):
                     Question.objects.filter(quiz_id=quiz.id).delete()
-                    for q in desired:
+                    for q_idx, q in enumerate(desired):
                         Question.objects.create(
+                            id=f"q-{quiz.id}-{q_idx}",
                             quiz_id=quiz.id,
                             text=q["text"],
                             type="mcq",
@@ -847,8 +861,7 @@ class Command(BaseCommand):
                 # LessonProfile: topic + prereqs (previous lesson in module)
                 prereq_ids = []
                 if spec.lesson_order > 1:
-                    prev_slug = slugify(f"m{spec.module_order}-{spec.lesson_order-1}-{lesson_specs[(spec.module_order-1)*10 + (spec.lesson_order-2)].title}")
-                    prev = Lesson.objects.filter(module_id=module.id, slug=prev_slug, difficulty=spec.difficulty).only("id").first()
+                    prev = Lesson.objects.filter(module_id=module.id, order=spec.lesson_order-1, difficulty=spec.difficulty).only("id").first()
                     if prev:
                         prereq_ids = [prev.id]
 

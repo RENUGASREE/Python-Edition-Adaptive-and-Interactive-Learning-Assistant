@@ -42,9 +42,8 @@ def setup_production():
     # 4. Seed Curriculum Data (Lessons, Modules, Challenges)
     print("📚 Seeding Curriculum Data...")
     try:
-        # We run it without --reset to be safe for repeated deploys,
-        # but since I fixed the IDs, it will create new records with correct IDs.
-        call_command('seed_curriculum_data')
+        # We run it with --reset to clean up any old/incorrect module IDs from previous deploys.
+        call_command('seed_curriculum_data', reset=True)
         print("✅ Curriculum data seeded.")
     except Exception as e:
         print(f"❌ Error seeding curriculum data: {e}")
