@@ -8,6 +8,7 @@ from django.db.models import Sum
 from datetime import timedelta
 from django.utils import timezone
 from gamification.models import XpEvent, Streak
+from core.adaptive import get_user_module_difficulty, normalize_level, progress_user_id
 from recommendation.services import normalize_topic
 
 class UserSerializer(serializers.ModelSerializer):
@@ -402,92 +403,23 @@ class ModuleSerializer(serializers.ModelSerializer):
         ).exists()
 
     def get_lessons(self, obj):
-        # ... (keep existing implementation)
         request = self.context.get("request")
         user = request.user if request else None
         if not user or not user.is_authenticated:
             return []
-        
-        # Step 1: Check pre-calculated context (Performance Optimization)
-        # This prevents redundant database scans for each module in the list
-        precalculated = self.context.get("precalculated_difficulties", {})
-        
-        assigned_difficulty = None
-        # Support both dashed and underscored module IDs for robustness
-        mod_id = str(obj.id)
-        search_keys = [mod_id, mod_id.replace("-", "_")]
-        
-        # Special case mappings from diagnostic quiz keys to module IDs
-        special_mappings = {
-            "mod-python-basics": ["mod_introduction", "mod-introduction"],
-            "mod-data-types": ["mod_variables_types", "mod-variables-types"],
-            "mod-control-flow": ["mod_control_flow", "mod_loops_iteration", "mod-loops-iteration"],
-            "mod-functions": ["mod_functions_scope", "mod-functions-scope"],
-            "mod-modules-packages": ["mod_file_handling", "mod-error-handling", "mod-file-handling", "mod-error-handling"],
-        }
-        if mod_id in special_mappings:
-            search_keys.extend(special_mappings[mod_id])
-            
-        for sk in search_keys:
-            # Support both original case and lowercase matching for maximum robustness
-            if sk in precalculated:
-                assigned_difficulty = precalculated[sk]
-                break
-            if sk.lower() in precalculated:
-                assigned_difficulty = precalculated[sk.lower()]
-                break
-        
-        if not assigned_difficulty:
-            # Step 2: Fallback to old mastery_vector check (safety mechanism)
-            mastery_vector = user.mastery_vector or {}
-            difficulty_map = mastery_vector.get("_module_difficulty", {})
-            for sk in search_keys:
-                if sk in difficulty_map:
-                    assigned_difficulty = difficulty_map[sk]
-                    break
-        
-        if not assigned_difficulty:
-            # Step 3: Final fallback to legacy quiz attempt logs
-            from .models import QuizAttempt as CoreQuizAttempt
-            attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
-            for attempt in attempts:
-                notes = attempt.notes or ""
-                # Support both numeric and slug-based module IDs (e.g., mod-python-basics)
-                match = re.search(r"module:([\w-]+):level:([A-Za-z]+)", notes)
-                if match and match.group(1).lower() == str(obj.id).lower():
-                    assigned_difficulty = match.group(2)
-        
-        target_level = assigned_difficulty or user.level or "Beginner"
-        normalized = target_level.strip().lower()
-        if normalized in ("pro", "advanced"):
-            normalized = "Pro"  # Database uses "Pro"
-        elif normalized == "intermediate":
-            normalized = "Intermediate"
-        else:
-            normalized = "Beginner"
-            
-        lessons = list(Lesson.objects.filter(module_id=obj.id, difficulty=normalized).order_by('order'))
+
+        target_level = get_user_module_difficulty(user, str(obj.id), default=user.level or "Beginner")
+        lessons_by_module = self.context.get("module_lessons_map") or {}
+        module_lessons = list(lessons_by_module.get(str(obj.id), []))
+        lessons = [lesson for lesson in module_lessons if normalize_level(lesson.difficulty) == target_level]
         if not lessons:
-            lessons = list(Lesson.objects.filter(module_id=obj.id).order_by('order'))
-            
-        user_id = user.original_uuid or str(user.id)
-        completed_ids = set(UserProgress.objects.filter(
-            user_id=user_id,
-            lesson_id__in=[lesson.id for lesson in lessons],
-            completed=True,
-        ).values_list("lesson_id", flat=True))
-        
-        prereq_map = {
-            item["lesson_id"]: (item["prerequisites"] or [])
-            for item in LessonProfile.objects.filter(lesson_id__in=[lesson.id for lesson in lessons]).values("lesson_id", "prerequisites")
-        }
-        
+            lessons = module_lessons or list(Lesson.objects.filter(module_id=obj.id).order_by("order", "id"))
+
+        completed_ids = set(self.context.get("completed_lesson_ids") or [])
         unlocked = []
-        for idx, lesson in enumerate(lessons):
+        for lesson in lessons:
             from .views import _lesson_unlocked
             is_unlocked = _lesson_unlocked(user, lesson)
-            
-            # Use SimpleLessonSerializer for the module list to keep it lightweight and fast
             serializer = SimpleLessonSerializer(lesson, context=self.context)
             data = serializer.data
             data["unlocked"] = is_unlocked

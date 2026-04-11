@@ -1,6 +1,7 @@
 """Assessment scoring and interaction logging used by adaptive engines."""
 from typing import Dict, List, Tuple
 from core.models import User
+from core.adaptive import QUIZ_TOPIC_MODULE_MAP, difficulty_for_score, normalize_level
 from ai_engine.services import apply_bkt_update
 from users.services import update_engagement
 from .models import DiagnosticQuestion, AssessmentInteraction
@@ -9,30 +10,15 @@ from recommendation.services import update_behavior_from_interaction, update_top
 
 def _difficulty_tier(weighted_score_pct: float) -> str:
     """Global tier based on overall weighted score."""
-    if weighted_score_pct >= 0.75:
-        return "Pro"
-    if weighted_score_pct >= 0.50:
-        return "Intermediate"
-    return "Beginner"
+    return difficulty_for_score(weighted_score_pct)
 
 
 def _module_difficulty_tier(module_score: float) -> str:
-    """
-    Per-module difficulty assignment based on placement quiz score.
-
-    >= 75%  -> Pro        (user is strong in this module)
-    >= 50%  -> Intermediate (user has foundational knowledge)
-    <  50%  -> Beginner   (user needs fundamentals first)
-    """
-    if module_score >= 0.75:
-        return "Pro"
-    if module_score >= 0.50:
-        return "Intermediate"
-    return "Beginner"
+    return difficulty_for_score(module_score)
 
 
 def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_count: int = 0, update_user: bool = True) -> Tuple[Dict, float, float, str]:
-    questions = list(DiagnosticQuestion.objects.filter(quiz_id=quiz_id))
+    questions = list(DiagnosticQuestion.objects.filter(quiz_id=quiz_id).prefetch_related("choices"))
     answer_map = {}
     for a in answers:
         try:
@@ -40,7 +26,7 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
             if q_id_val is not None:
                 answer_map[str(q_id_val)] = {
                     "selectedIndex": int(a.get("selectedIndex", -1)),
-                    "isCorrect": bool(a.get("isCorrect", False)),
+                    "selectedOptionId": a.get("selectedOptionId"),
                     "timeSpent": float(a.get("timeSpent", 0)),
                     "hintsUsed": int(a.get("hintsUsed", 0)),
                 }
@@ -53,29 +39,42 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
     correct = 0
     total_points = 0
     correct_points = 0
+    interactions = []
 
     for question in questions:
         total += 1
         total_points += int(getattr(question, "points", 1) or 1)
         canon_topic = normalize_topic(question.topic)
         module_totals[canon_topic] = module_totals.get(canon_topic, 0) + 1
-        
+
         selected_payload = answer_map.get(str(question.id))
-        
-        is_correct = selected_payload.get("isCorrect") is True if selected_payload else False
+        selected_option_id = str(selected_payload.get("selectedOptionId")) if selected_payload and selected_payload.get("selectedOptionId") is not None else None
+        is_correct = False
+        if selected_payload:
+            if question.choices.exists():
+                is_correct = any(str(choice.id) == selected_option_id and choice.is_correct for choice in question.choices.all())
+            else:
+                raw_index = selected_payload.get("selectedIndex", -1)
+                is_correct = raw_index == int(question.correct_index)
+
         if is_correct:
             correct += 1
             correct_points += int(getattr(question, "points", 1) or 1)
             module_correct[canon_topic] = module_correct.get(canon_topic, 0) + 1
-        
-        AssessmentInteraction.objects.create(
-            user=user,
-            topic=canon_topic,
-            correctness=is_correct,
-            time_spent=(selected_payload.get("timeSpent") if selected_payload else 0),
-            hints_used=(selected_payload.get("hintsUsed") if selected_payload else 0),
-            source="diagnostic",
+
+        interactions.append(
+            AssessmentInteraction(
+                user=user,
+                topic=canon_topic,
+                correctness=is_correct,
+                time_spent=(selected_payload.get("timeSpent") if selected_payload else 0),
+                hints_used=(selected_payload.get("hintsUsed") if selected_payload else 0),
+                source="diagnostic",
+            )
         )
+
+    if interactions:
+        AssessmentInteraction.objects.bulk_create(interactions)
 
     module_scores = {}
     for topic, total_count in module_totals.items():
@@ -106,24 +105,12 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
 
             # Assign per-module difficulty tier
             module_difficulty = _module_difficulty_tier(score)
-            
-            # Resolve topic to the actual canonical module ID (e.g., 'mod-introduction' -> 'mod-python-basics')
-            target_module = (
-                Lesson.objects.filter(module_id__icontains=topic.replace("mod-", ""))
-                .values_list("module_id", flat=True)
-                .first()
-            )
-            if not target_module:
-                if canon_topic in ["mod-introduction", "introduction"]:
-                    target_module = "mod-python-basics"
-                else:
-                    target_module = topic # Fallback
-            
-            # Save to difficulty map using canonical ID and legacy variants for maximum robustness
+
+            target_module = QUIZ_TOPIC_MODULE_MAP.get(canon_topic, canon_topic)
             module_difficulty_map[target_module] = module_difficulty
             module_difficulty_map[target_module.replace("-", "_")] = module_difficulty
-            if canon_topic != target_module:
-                module_difficulty_map[canon_topic] = module_difficulty
+            module_difficulty_map[canon_topic] = module_difficulty
+            module_difficulty_map[canon_topic.replace("-", "_")] = module_difficulty
 
             UserMastery.objects.update_or_create(
                 user=user,
@@ -137,7 +124,7 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
         user.mastery_vector = mastery_vector
         user.diagnostic_completed = True
         user.has_taken_quiz = True
-        user.level = tier  # Global fallback tier
+        user.level = normalize_level(tier)
         user.save(update_fields=["mastery_vector", "diagnostic_completed", "has_taken_quiz", "level"])
         update_engagement(user, 0.05)
     return module_scores, raw_score, weighted, tier

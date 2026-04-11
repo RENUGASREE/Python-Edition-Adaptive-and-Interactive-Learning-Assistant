@@ -10,6 +10,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.http import HttpResponse
+from django.core.cache import cache
+from django.db import transaction
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
@@ -21,6 +23,19 @@ from evaluation.services import log_recommendation_event, mark_recommendation_ac
 from recommendation.services import update_topic_velocity, update_shift_outcome, get_behavior, compute_difficulty_adjustment, log_difficulty_shift
 from analytics.services.skill_analysis import analyze_user_skill_gaps
 from core.services.ai_quiz_generator import generate_quiz_from_lesson
+from core.adaptive import (
+    bump_user_cache_version,
+    cache_key_for_user,
+    difficulty_for_score,
+    get_module_difficulty_map,
+    get_user_module_difficulty,
+    lesson_ids_for_user_module,
+    lesson_queryset_for_user_module,
+    module_lookup_keys,
+    normalize_level,
+    progress_user_id,
+    update_user_module_mastery,
+)
 import subprocess
 import os
 import uuid
@@ -37,69 +52,30 @@ import math
 logger = logging.getLogger(__name__)
 
 def normalize_level_for_score(score):
-    # Ensure score is normalized to 0-100 scale
-    s = float(score)
-    if s < 50:
-        return "Beginner"
-    if s < 80:
-        return "Intermediate"
-    return "Pro"
+    return difficulty_for_score(float(score))
 
 def map_level_to_db(level):
-    if not level:
-        return "Beginner"
-    lower = level.strip().lower()
-    if lower in ["pro", "advanced"]:
-        return "Pro"  # Database stores as "Pro"
-    if lower == "intermediate":
-        return "Intermediate"
-    return "Beginner"
+    return normalize_level(level)
 
 def update_user_mastery(user, module_id, score, source, topic=None):
-    normalized_score = float(score)
-    if normalized_score > 1:
-        normalized_score = normalized_score / 100
-    normalized_score = max(0.0, min(1.0, normalized_score))
-    existing = UserMastery.objects.filter(user=user, module_id=module_id).first()
-    if existing:
-        new_score = round(existing.mastery_score * 0.7 + normalized_score * 0.3, 4)
-        existing.mastery_score = new_score
-        existing.last_source = source
-        existing.save(update_fields=["mastery_score", "last_source", "last_updated"])
-    else:
-        new_score = round(normalized_score, 4)
-        UserMastery.objects.create(
-            user=user,
-            module_id=module_id,
-            mastery_score=new_score,
-            last_source=source,
-        )
-    mastery_vector = user.mastery_vector or {}
-    module_difficulty_map = mastery_vector.get("_module_difficulty", {})
-    
-    difficulty_label = normalize_level_for_score(new_score * 100)
-
     if topic:
-        mastery_vector[topic] = new_score
-    else:
-        module_key = str(module_id)
-        mastery_vector[module_key] = new_score
-        # Also update _module_difficulty map for consistency across adaptive systems
-        module_difficulty_map[module_key] = difficulty_label
-        module_difficulty_map[module_key.replace("-", "_")] = difficulty_label
-        
-    mastery_vector["_module_difficulty"] = module_difficulty_map
-    user.mastery_vector = mastery_vector
-    user.save(update_fields=["mastery_vector"])
-    if topic:
-        update_topic_velocity(user, topic, new_score)
-    return new_score
+        normalized_score = float(score)
+        if normalized_score > 1:
+            normalized_score = normalized_score / 100
+        normalized_score = max(0.0, min(1.0, normalized_score))
+        mastery_vector = user.mastery_vector or {}
+        mastery_vector[topic] = round(normalized_score, 4)
+        user.mastery_vector = mastery_vector
+        user.save(update_fields=["mastery_vector"])
+        update_topic_velocity(user, topic, normalized_score)
+        return normalized_score
+    return update_user_module_mastery(user, module_id, score, source)
 
 def is_level_completed(user, module_id, db_level):
     lesson_ids = list(Lesson.objects.filter(module_id=module_id, difficulty=db_level).values_list("id", flat=True))
     if not lesson_ids:
         return False
-    user_id = user.original_uuid or str(user.id)
+    user_id = progress_user_id(user)
     completed_count = UserProgress.objects.filter(
         user_id=user_id,
         lesson_id__in=lesson_ids,
@@ -108,7 +84,7 @@ def is_level_completed(user, module_id, db_level):
     return completed_count == len(lesson_ids)
 
 def _progress_user_id(user):
-    return user.original_uuid or str(user.id)
+    return progress_user_id(user)
 
 def _quiz_completed(user):
     try:
@@ -133,102 +109,51 @@ def _module_completed(user, module_id):
     return completed_count == len(lesson_ids)
 
 def _module_level_map(user):
-    levels = {}
-    mastery_vector = user.mastery_vector or {}
-    difficulty_map = mastery_vector.get("_module_difficulty", {})
-    
-    # 1. Populate from mastery_vector (primary source)
-    for key, val in difficulty_map.items():
-        levels[key] = val
-        # Handle string vs int IDs if any
-        if key.isdigit():
-            levels[int(key)] = val
-        if key.replace("_", "-").replace("mod-", "").isdigit():
-            try:
-                levels[int(key.replace("_", "-").replace("mod-", ""))] = val
-            except ValueError:
-                pass
-            
-    # 2. Overlay from QuizAttempt notes (legacy/manual)
-    attempts = QuizAttempt.objects.filter(user=user).order_by("completed_at")
-    for attempt in attempts:
-        match = re.search(r"module:(\d+):level:([A-Za-z]+)", attempt.notes or "")
-        if match:
-            levels[int(match.group(1))] = match.group(2)
-            
-    # 3. Handle special diagnostic module name mappings
-    intro_val = difficulty_map.get("mod_introduction") or difficulty_map.get("mod-introduction")
-    if intro_val:
-        levels["mod-python-basics"] = intro_val
-        
-    var_val = difficulty_map.get("mod_variables_types") or difficulty_map.get("mod-variables-types")
-    if var_val:
-        levels["mod-variables-types"] = var_val
-
-    return levels
+    return get_module_difficulty_map(user)
 
 def _normalize_level(level):
-    lower = (level or "").strip().lower()
-    if lower == "pro" or lower == "advanced":
-        return "Pro"  # Database uses "Pro"
-    if lower == "intermediate":
-        return "Intermediate"
-    return "Beginner"
+    return normalize_level(level)
 
 def _lesson_ids_for_user_module(user, module_id):
-    """
-    Returns lesson IDs for the user filtered by their assigned difficulty level.
-    """
-    mastery_vector = user.mastery_vector or {}
-    difficulty_map = mastery_vector.get("_module_difficulty", {}).copy()
-    
-    # Add reverse mappings from diagnostic quiz keys to actual module IDs
-    reverse_mappings = {
-        "mod_introduction": "mod-python-basics",
-        "mod_variables_types": "mod-data-types",
-        "mod_control_flow": "mod-control-flow",
-        "mod_loops_iteration": "mod-control-flow",
-        "mod_functions_scope": "mod-functions",
-        "mod_file_handling": "mod-modules-packages",
-        "mod_error_handling": "mod-modules-packages",
-    }
-    for alias_key, target_module in reverse_mappings.items():
-        if alias_key in difficulty_map:
-            difficulty_map[target_module] = difficulty_map[alias_key]
-            difficulty_map[target_module.replace("-", "_")] = difficulty_map[alias_key]
-    
-    # Find the assigned difficulty for this module
-    mod_id = str(module_id)
-    search_keys = [mod_id, mod_id.replace("-", "_")]
-    special_mappings = {
-        "mod-python-basics": ["mod_introduction", "mod-introduction"],
-        "mod-data-types": ["mod_variables_types", "mod-variables-types"],
-        "mod-control-flow": ["mod_control_flow", "mod_loops_iteration", "mod-loops-iteration"],
-        "mod-functions": ["mod_functions_scope", "mod-functions-scope"],
-        "mod-modules-packages": ["mod_file_handling", "mod_error_handling", "mod-file-handling", "mod-error-handling"],
-    }
-    if mod_id in special_mappings:
-        search_keys.extend(special_mappings[mod_id])
-    
-    assigned_difficulty = None
-    for sk in search_keys:
-        if sk in difficulty_map:
-            assigned_difficulty = difficulty_map[sk]
-            break
-    
-    # Map to database difficulty value
-    if assigned_difficulty:
-        target_difficulty = map_level_to_db(assigned_difficulty)
-    else:
-        target_difficulty = map_level_to_db(user.level or "Beginner")
-    
-    # Return lessons filtered by difficulty
-    lessons = Lesson.objects.filter(module_id=module_id, difficulty=target_difficulty).order_by('order')
-    if lessons.exists():
-        return list(lessons.values_list("id", flat=True))
-    
-    # Fallback: return all lessons if no lessons match the target difficulty
-    return list(Lesson.objects.filter(module_id=module_id).order_by('order').values_list("id", flat=True))
+    return lesson_ids_for_user_module(user, module_id)
+
+def _lesson_lock_message(user, lesson):
+    module = Module.objects.filter(id=lesson.module_id).first()
+    if not _quiz_completed(user):
+        if module and module.order == 1 and lesson.order == 1:
+            return None
+        return "Complete the placement quiz to unlock your personalized lesson path."
+    if not module:
+        return "This lesson is not attached to a valid module."
+    if not _module_unlocked(user, module):
+        previous_module = Module.objects.filter(order=module.order - 1).first()
+        if previous_module:
+            return f"Complete {previous_module.title} to unlock {module.title}."
+        return f"{module.title} is not unlocked yet."
+    if lesson.order == 1 and not _prerequisites_met(user, lesson.id):
+        return "Complete the required prerequisite lessons first."
+    if lesson.order > 1:
+        previous_lessons = Lesson.objects.filter(module_id=lesson.module_id, order=lesson.order - 1)
+        prev_ids = list(previous_lessons.values_list("id", flat=True))
+        if prev_ids and not UserProgress.objects.filter(
+            user_id=_progress_user_id(user),
+            lesson_id__in=prev_ids,
+            completed=True,
+        ).exists():
+            return "Complete the previous lesson to unlock this one."
+    if not _prerequisites_met(user, lesson.id):
+        return "Complete the required prerequisite lessons first."
+    return None
+
+def _module_lock_message(user, module):
+    if module.order == 1:
+        return None
+    if not _quiz_completed(user):
+        return "Complete the placement quiz to unlock the adaptive curriculum."
+    previous_module = Module.objects.filter(order=module.order - 1).first()
+    if previous_module and not _module_completed(user, previous_module.id):
+        return f"Complete {previous_module.title} to unlock {module.title}."
+    return None
 
 def _prerequisites_met(user, lesson_id: str) -> bool:
     profile = LessonProfile.objects.filter(lesson_id=str(lesson_id)).first()
@@ -751,46 +676,24 @@ class ModuleViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user or not user.is_authenticated:
             return context
-            
-        # Pre-calculate all module difficulties once to avoid N+1 queries in ModuleSerializer
-        mastery_vector = user.mastery_vector or {}
-        diff_map = mastery_vector.get("_module_difficulty", {}).copy()
-        
-        # Add reverse mappings from diagnostic quiz keys to module IDs
-        # This ensures lookups work when mastery vector uses different keys than module IDs
-        reverse_mappings = {
-            "mod_introduction": "mod-python-basics",
-            "mod_variables_types": "mod-data-types",
-            "mod_control_flow": "mod-control-flow",
-            "mod_loops_iteration": "mod-control-flow",
-            "mod_functions_scope": "mod-functions",
-            "mod_file_handling": "mod-modules-packages",
-            "mod_error_handling": "mod-modules-packages",
+        modules = list(Module.objects.all().order_by("order"))
+        module_ids = [module.id for module in modules]
+        all_lessons = list(Lesson.objects.filter(module_id__in=module_ids).order_by("module_id", "order", "id"))
+        lessons_by_module = {}
+        for lesson in all_lessons:
+            lessons_by_module.setdefault(str(lesson.module_id), []).append(lesson)
+        progress_map = set(
+            UserProgress.objects.filter(user_id=_progress_user_id(user), completed=True).values_list("lesson_id", flat=True)
+        )
+        profile_map = {
+            item["lesson_id"]: (item["prerequisites"] or [])
+            for item in LessonProfile.objects.filter(lesson_id__in=[lesson.id for lesson in all_lessons]).values("lesson_id", "prerequisites")
         }
-        for alias_key, target_module in reverse_mappings.items():
-            if alias_key in diff_map:
-                diff_map[target_module] = diff_map[alias_key]
-                diff_map[target_module.replace("-", "_")] = diff_map[alias_key]
-        
-        # Merge with legacy quiz attempt notes to ensure consistency (same logic as Serializer)
-        from .models import QuizAttempt as CoreQuizAttempt
-        import re
-        attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
-        for attempt in attempts:
-            notes = attempt.notes or ""
-            match = re.search(r"module:([\w-]+):level:([A-Za-z]+)", notes)
-            if match:
-                m_id = match.group(1).lower()
-                lvl = match.group(2)
-                diff_map[m_id] = lvl
-                diff_map[m_id.replace("-", "_")] = lvl
-                # Also add reverse mapping
-                if m_id in reverse_mappings:
-                    target = reverse_mappings[m_id]
-                    diff_map[target] = lvl
-                    diff_map[target.replace("-", "_")] = lvl
-                
-        context["precalculated_difficulties"] = diff_map
+        context["precalculated_difficulties"] = get_module_difficulty_map(user)
+        context["module_lessons_map"] = lessons_by_module
+        context["completed_lesson_ids"] = progress_map
+        context["lesson_prereq_map"] = profile_map
+        context["all_modules"] = modules
         return context
 
     def get_queryset(self):
@@ -798,7 +701,14 @@ class ModuleViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         try:
-            return super().list(request, *args, **kwargs)
+            cache_key = cache_key_for_user(request.user, "modules-list")
+            cached_payload = cache.get(cache_key)
+            if cached_payload is not None:
+                return Response(cached_payload)
+            response = super().list(request, *args, **kwargs)
+            if response.status_code == status.HTTP_200_OK:
+                cache.set(cache_key, response.data, timeout=120)
+            return response
         except Exception as e:
             logger.error(f"Error in ModuleViewSet.list: {str(e)}", exc_info=True)
             return Response({"error": "Internal Server Error", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -809,7 +719,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
             if not module:
                 return Response({"message": "Module not found"}, status=status.HTTP_404_NOT_FOUND)
             if not _module_unlocked(request.user, module):
-                return Response({"message": "You need to complete the placement quiz to personalize your learning path."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"message": _module_lock_message(request.user, module)}, status=status.HTTP_403_FORBIDDEN)
             serializer = self.get_serializer(module)
             return Response(serializer.data)
         except Exception as e:
@@ -840,6 +750,10 @@ class LessonViewSet(viewsets.ModelViewSet):
         if not lesson:
             logger.warning(f"Lesson not found: {kwargs.get('pk')}")
             return Response({"message": "Lesson not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not request.user or not request.user.is_authenticated:
+            return Response({"message": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+        if not _lesson_unlocked(request.user, lesson):
+            return Response({"message": _lesson_lock_message(request.user, lesson)}, status=status.HTTP_403_FORBIDDEN)
         # Bypassing _lesson_unlocked check for direct ID requests to ensure access from dashboard
         try:
             # Fix: Ensure Question import is available if needed
@@ -863,8 +777,14 @@ class LessonViewSet(viewsets.ModelViewSet):
                     logger.info(f"Generated quiz for lesson {lesson.id}")
         except Exception as e:
             logger.error(f"Error generating quiz for lesson {lesson.id}: {e}")
+        cache_key = cache_key_for_user(request.user, "lesson-detail", lesson.id)
+        cached_payload = cache.get(cache_key)
+        if cached_payload is not None:
+            return Response(cached_payload)
         serializer = self.get_serializer(lesson)
-        return Response(serializer.data)
+        payload = serializer.data
+        cache.set(cache_key, payload, timeout=120)
+        return Response(payload)
 
 class QuizViewSet(viewsets.ModelViewSet):
     queryset = Quiz.objects.all()
@@ -971,14 +891,7 @@ class UserProgressViewSet(viewsets.ModelViewSet):
                     update_shift_outcome(user, topic, mastery_before, mastery_after)
                 
                 # Logic to unlock the next lesson immediately
-                # Get lessons matching user's difficulty level for proper sequencing
-                target_difficulty = (lesson.difficulty or user.level or "Beginner").strip()
-                
-                # Get lessons in this module filtered by user's difficulty level
-                lessons_in_module = Lesson.objects.filter(
-                    module_id=lesson.module_id, 
-                    difficulty=target_difficulty
-                ).order_by('order')
+                lessons_in_module = lesson_queryset_for_user_module(user, lesson.module_id)
                 lesson_list = list(lessons_in_module)
                 
                 try:
@@ -1021,6 +934,7 @@ class UserProgressViewSet(viewsets.ModelViewSet):
                                 "pdf_path": f"/certificate/{lesson.module_id}",
                             },
                         )
+        bump_user_cache_version(user)
         output = self.get_serializer(progress).data
         return Response(output, status=status.HTTP_200_OK)
 
@@ -1358,48 +1272,35 @@ class SubmitQuizView(APIView):
             logger.warning(f"No answers provided for quiz {quiz_id}")
             return Response({"message": "No answers provided"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if user already attempted this quiz
-        existing_attempt = QuizAttempt.objects.filter(user=request.user, quiz=quiz).first()
-        if existing_attempt:
-            logger.info(f"User {request.user.id} already attempted quiz {quiz_id}")
-            return Response({"message": "Quiz already attempted"}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            existing_attempt = QuizAttempt.objects.select_for_update().filter(user=request.user, quiz=quiz).first()
+            if existing_attempt:
+                logger.info(f"User {request.user.id} already attempted quiz {quiz_id}")
+                return Response({"message": "Quiz already attempted"}, status=status.HTTP_400_BAD_REQUEST)
 
-        questions = Question.objects.filter(quiz_id=quiz.id)
-        question_map = {q.id: q for q in questions}
-        score = 0
-        total_questions = len(questions)
+            questions = list(Question.objects.filter(quiz_id=quiz.id).only("id", "options"))
+            question_map = {q.id: q for q in questions}
+            score = 0
+            total_questions = len(questions)
+            attempt = QuizAttempt.objects.create(
+                user=request.user,
+                quiz=quiz,
+                score=0,
+                total_questions=total_questions,
+            )
+            logger.info(f"Created quiz attempt {attempt.id} for user {request.user.id}")
 
-        # Create QuizAttempt
-        attempt = QuizAttempt.objects.create(
-            user=request.user,
-            quiz=quiz,
-            score=0,  # Will update after calculating
-            total_questions=total_questions
-        )
-        logger.info(f"Created quiz attempt {attempt.id} for user {request.user.id}")
+            for answer in answers:
+                q_id = answer.get("question_id")
+                selected = answer.get("selected")
+                if q_id in question_map and isinstance(selected, int):
+                    question = question_map[q_id]
+                    options = question.options or []
+                    if isinstance(options, list) and 0 <= selected < len(options) and options[selected].get("correct", False):
+                        score += 1
 
-        # Process answers
-        for answer in answers:
-            q_id = answer.get("question_id")
-            selected = answer.get("selected")
-            if q_id in question_map:
-                question = question_map[q_id]
-                options = question.options or []
-                is_correct = False
-                if isinstance(options, list) and 0 <= selected < len(options):
-                    is_correct = options[selected].get("correct", False)
-                if is_correct:
-                    score += 1
-                # QuestionAttempt.objects.create(
-                #     attempt=attempt,
-                #     question=question,
-                #     selected_option=selected,
-                #     is_correct=is_correct
-                # )
-
-        # Update score
-        attempt.score = score
-        attempt.save()
+            attempt.score = score
+            attempt.save(update_fields=["score"])
         logger.info(f"Quiz attempt {attempt.id} completed with score {score}/{total_questions}")
 
         # Analyze skill gaps
@@ -1421,6 +1322,7 @@ class SubmitQuizView(APIView):
             if not progress.completed_at:
                 progress.completed_at = timezone.now()
         progress.save()
+        bump_user_cache_version(user)
         logger.info(f"Quiz completed for user {user.id}, lesson {quiz.lesson_id}, score: {quiz_percentage}%")
 
         # --- Module Certificate Award Logic ---
@@ -1801,28 +1703,29 @@ class ModuleQuizView(APIView):
                 "questions": []
             })
 
-        # If unlocked, aggregate questions from ALL module lessons
-        # Each lesson usually has a quiz. Find all quizzes for these lessons.
         import random
-        
+
+        quiz_ids_by_lesson = {}
+        for quiz in Quiz.objects.filter(lesson_id__in=lesson_ids).only("id", "lesson_id"):
+            quiz_ids_by_lesson.setdefault(str(quiz.lesson_id), []).append(quiz.id)
+
+        questions_by_lesson = {}
+        quiz_id_to_lesson = {
+            quiz_id: lesson_id
+            for lesson_id, quiz_ids in quiz_ids_by_lesson.items()
+            for quiz_id in quiz_ids
+        }
+        for question in Question.objects.filter(quiz_id__in=list(quiz_id_to_lesson.keys())).only("id", "quiz_id", "text", "type", "options", "points"):
+            lesson_key = quiz_id_to_lesson.get(question.quiz_id)
+            if lesson_key:
+                questions_by_lesson.setdefault(lesson_key, []).append(question)
+
         lesson_questions = []
         for lid in lesson_ids:
-            # Find quizzes for this specific lesson
-            quizzes = Quiz.objects.filter(lesson_id=lid)
-            lesson_qs_pool = list(Question.objects.filter(quiz_id__in=quizzes.values_list("id", flat=True)))
-            if lesson_qs_pool:
-                random.shuffle(lesson_qs_pool)
-                # Take up to 3 questions from each lesson to ensure variety
-                lesson_questions.extend(lesson_qs_pool[:3])
-        
-        # If we still have room, add more random questions from the module
-        if len(lesson_questions) < 20:
-            remaining_ids = Question.objects.filter(
-                quiz_id__in=Quiz.objects.filter(lesson_id__in=lesson_ids).values_list("id", flat=True)
-            ).exclude(id__in=[q.id for q in lesson_questions]).values_list("id", flat=True)
-            
-            extra_ids = random.sample(list(remaining_ids), min(len(remaining_ids), 20 - len(lesson_questions)))
-            lesson_questions.extend(list(Question.objects.filter(id__in=extra_ids)))
+            lesson_pool = list(questions_by_lesson.get(lid, []))
+            if lesson_pool:
+                random.shuffle(lesson_pool)
+                lesson_questions.extend(lesson_pool[:3])
 
         random.shuffle(lesson_questions)
         
@@ -1834,7 +1737,5 @@ class ModuleQuizView(APIView):
             "title": f"{module.title} Comprehensive Quiz",
             "locked": False,
             "questions": final_questions,
-            "totalAvailable": Question.objects.filter(
-                quiz_id__in=Quiz.objects.filter(lesson_id__in=lesson_ids)
-            ).count()
+            "totalAvailable": sum(len(items) for items in questions_by_lesson.values())
         })

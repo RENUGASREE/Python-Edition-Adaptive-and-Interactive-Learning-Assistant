@@ -34,7 +34,11 @@ def analyze_user_skill_gaps(user: User) -> Tuple[Dict[str, float], Dict[str, str
     
     now = timezone.now()
     
-    # 2. Bulk update or create skill gap analysis
+    # 2. Optimized Bulk Update/Create
+    existing_analyses = {a.topic: a for a in SkillGapAnalysis.objects.filter(user=user)}
+    to_create = []
+    to_update = []
+
     for s in stats:
         topic = (s['topic'] or "").strip()
         if not topic: continue
@@ -44,18 +48,28 @@ def analyze_user_skill_gaps(user: User) -> Tuple[Dict[str, float], Dict[str, str
         status = _categorize(acc)
         status_map[topic] = status
         
-        SkillGapAnalysis.objects.update_or_create(
-            user=user,
-            topic=topic,
-            defaults={
-                "accuracy": round(acc * 100, 2),
-                "status": status,
-                "last_updated": now,
-            },
-        )
+        if topic in existing_analyses:
+            analysis = existing_analyses[topic]
+            analysis.accuracy = round(acc * 100, 2)
+            analysis.status = status
+            analysis.last_updated = now
+            to_update.append(analysis)
+        else:
+            to_create.append(SkillGapAnalysis(
+                user=user,
+                topic=topic,
+                accuracy=round(acc * 100, 2),
+                status=status,
+                last_updated=now
+            ))
+
+    if to_create:
+        SkillGapAnalysis.objects.bulk_create(to_create)
+    if to_update:
+        SkillGapAnalysis.objects.bulk_update(to_update, ['accuracy', 'status', 'last_updated'])
     
-    # 3. Only generate a learning plan if significant changes occurred or time passed
-    last_plan = LearningPlan.objects.filter(user=user).order_with_respect_to('id').last()
+    # 3. Learning plan generation with cooldown
+    last_plan = LearningPlan.objects.filter(user=user).order_by('id').last()
     if not last_plan or (now - last_plan.created_at).total_seconds() > 3600: # 1 hour cooldown
         _generate_learning_plan(user, accuracy_map, status_map)
         
