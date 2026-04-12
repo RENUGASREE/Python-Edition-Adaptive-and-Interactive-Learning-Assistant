@@ -104,15 +104,19 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
         for topic, score in module_scores.items():
             canon_topic = normalize_topic(topic)
             mastery_vector[canon_topic] = score
+            mastery_vector[canon_topic.replace("_", "-")] = score
 
             # Assign per-module difficulty tier
             module_difficulty = _module_difficulty_tier(score)
 
-            target_module = QUIZ_TOPIC_MODULE_MAP.get(canon_topic, canon_topic)
+            # Ensure we check both dash and underscore versions in the mapping
+            target_module = QUIZ_TOPIC_MODULE_MAP.get(canon_topic) or \
+                           QUIZ_TOPIC_MODULE_MAP.get(canon_topic.replace("_", "-")) or \
+                           canon_topic
+
             module_difficulty_map[target_module] = module_difficulty
             module_difficulty_map[target_module.replace("-", "_")] = module_difficulty
-            module_difficulty_map[canon_topic] = module_difficulty
-            module_difficulty_map[canon_topic.replace("-", "_")] = module_difficulty
+            module_difficulty_map[target_module.replace("_", "-")] = module_difficulty
 
             UserMastery.objects.update_or_create(
                 user=user,
@@ -126,7 +130,25 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
         user.mastery_vector = mastery_vector
         user.diagnostic_completed = True
         user.has_taken_quiz = True
-        user.level = normalize_level(tier)
+
+        # Calculate a more representatitve global level: 
+        # If overall weighted_score is low, but some modules are high, 
+        # we don't want to trap an expert in Beginner mode globally.
+        # We take the best module difficulty or the weighted average tier, whichever is higher.
+        module_tiers = [m_diff for m_diff in module_difficulty_map.values()]
+        tier_values = {"Beginner": 1, "Intermediate": 2, "Pro": 3}
+        best_tier_val = max([tier_values.get(t, 1) for t in module_tiers]) if module_tiers else 1
+        global_tier_val = tier_values.get(tier, 1)
+        
+        final_tier = tier
+        if best_tier_val > global_tier_val:
+            # If they aced any module, they are at least Intermediate globally
+            # If they aced multiple, they might be Pro
+            for t_name, t_val in tier_values.items():
+                if t_val == best_tier_val:
+                    final_tier = t_name
+        
+        user.level = normalize_level(final_tier)
         user.save(update_fields=["mastery_vector", "diagnostic_completed", "has_taken_quiz", "level"])
         update_engagement(user, 0.05)
     return module_scores, raw_score, weighted, tier

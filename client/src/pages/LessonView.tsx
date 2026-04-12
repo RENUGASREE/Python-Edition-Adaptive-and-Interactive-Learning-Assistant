@@ -257,10 +257,10 @@ export default function LessonView() {
           const quizDone = currentProgress?.quizCompleted;
           
           toast({
-            title: quizDone ? "Challenge Passed! ✅" : "Challenge Passed! ✅",
+            title: "Coding Challenge Completed! ✅",
             description: quizDone 
               ? "Challenge passed! Next lesson unlocked ✅" 
-              : "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
+              : "Coding challenge completed successfully!",
             className: "bg-green-500 text-white border-none",
           });
           
@@ -337,10 +337,10 @@ export default function LessonView() {
         const quizDone = currentProgress?.quizCompleted;
 
         toast({
-          title: quizDone ? "Challenge Passed! ✅" : "Challenge Passed! ✅",
+          title: "Coding Challenge Completed! ✅",
           description: quizDone 
             ? "Challenge passed! Next lesson unlocked ✅" 
-            : "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
+            : "Coding challenge completed successfully!",
           className: "bg-green-500 text-white border-none",
         });
         setMasteryImpact(0.06);
@@ -634,9 +634,7 @@ export default function LessonView() {
 
                       const motivationalMessage = challengeDone
                         ? "Choice well made! Next lesson unlocked ✅"
-                        : (score >= 80 
-                          ? "Great job! Now complete the Coding Challenge to unlock the next lesson."
-                          : "Keep learning! Complete the Coding Challenge to unlock the next lesson.");
+                        : "Knowledge check completed successfully!";
                       
                       toast({
                         title: "Knowledge Check Completed! ✅",

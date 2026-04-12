@@ -411,7 +411,25 @@ class ModuleSerializer(serializers.ModelSerializer):
         target_level = get_user_module_difficulty(user, str(obj.id), default=user.level or "Beginner")
         lessons_by_module = self.context.get("module_lessons_map") or {}
         module_lessons = list(lessons_by_module.get(str(obj.id), []))
+        
+        # 1. Try exact match
         lessons = [lesson for lesson in module_lessons if normalize_level(lesson.difficulty) == target_level]
+        
+        # 2. If no exact match, try to find the "closest" difficulty
+        if not lessons and module_lessons:
+            # Difficulty hierarchy
+            ranks = {"Beginner": 1, "Intermediate": 2, "Pro": 3}
+            target_rank = ranks.get(target_level, 1)
+            
+            # Find all available difficulties for this module
+            available_ranks = sorted(list(set(ranks.get(normalize_level(l.difficulty), 1) for l in module_lessons)))
+            
+            if available_ranks:
+                # Find the rank closest to target_rank
+                best_rank = min(available_ranks, key=lambda r: abs(r - target_rank))
+                lessons = [lesson for lesson in module_lessons if ranks.get(normalize_level(lesson.difficulty), 1) == best_rank]
+
+        # 3. Ultimate fallback to ensure module is never empty if lessons exist in DB
         if not lessons:
             lessons = module_lessons or list(Lesson.objects.filter(module_id=obj.id).order_by("order", "id"))
 

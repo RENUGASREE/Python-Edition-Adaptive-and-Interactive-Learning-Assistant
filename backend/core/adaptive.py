@@ -23,17 +23,33 @@ MODULE_ALIAS_MAP = {
     "mod_file_handling": "mod-modules-packages",
     "mod-error-handling": "mod-modules-packages",
     "mod_error_handling": "mod-modules-packages",
+    # Reverse aliases for robust lookup
+    "mod-python-basics": "mod-python-basics",
+    "mod_python_basics": "mod-python-basics",
+    "mod-data-types": "mod-data-types",
+    "mod_data_types": "mod-data-types",
+    "mod-functions": "mod-functions",
+    "mod_functions": "mod-functions",
+    "mod-modules-packages": "mod-modules-packages",
+    "mod_modules_packages": "mod-modules-packages",
 }
 
 
 QUIZ_TOPIC_MODULE_MAP = {
     "mod-introduction": "mod-python-basics",
+    "mod_introduction": "mod-python-basics",
     "mod-variables-types": "mod-data-types",
+    "mod_variables_types": "mod-data-types",
     "mod-control-flow": "mod-control-flow",
+    "mod_control_flow": "mod-control-flow",
     "mod-loops-iteration": "mod-loops-iteration",
+    "mod_loops_iteration": "mod-loops-iteration",
     "mod-functions-scope": "mod-functions",
+    "mod_functions_scope": "mod-functions",
     "mod-file-handling": "mod-modules-packages",
+    "mod_file_handling": "mod-modules-packages",
     "mod-error-handling": "mod-modules-packages",
+    "mod_error_handling": "mod-modules-packages",
 }
 
 
