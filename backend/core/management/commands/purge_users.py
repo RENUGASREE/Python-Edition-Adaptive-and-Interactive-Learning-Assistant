@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.db import connection
-from core.models import Progress, QuizAttempt, Certificate, Recommendation, ChatMessage, UserMastery, DiagnosticAttempt
+from core.models import Progress, QuizAttempt, Certificate, Recommendation, ChatMessage, UserMastery
 from gamification.models import UserBadge, XpEvent, Streak
 from evaluation.models import RecommendationEvent, RecommendationOutcome, RecommendationStrategyAssignment
 from recommendation.models import UserTopicBehavior, DifficultyShift
@@ -59,10 +59,7 @@ class Command(BaseCommand):
             UserMastery.objects.all().delete()
         except Exception:
             pass
-        try:
-            DiagnosticAttempt.objects.all().delete()
-        except Exception:
-            pass
+
         try:
             UserTopicBehavior.objects.all().delete()
         except Exception:

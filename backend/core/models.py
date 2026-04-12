@@ -118,17 +118,7 @@ class UserMastery(models.Model):
     last_source = models.CharField(max_length=50, default="diagnostic")
     last_updated = models.DateTimeField(auto_now=True)
 
-class DiagnosticAttempt(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    quiz_id = models.CharField(max_length=255)
-    module_scores = models.JSONField(default=dict)
-    overall_score = models.FloatField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
 
-class DiagnosticQuestionMeta(models.Model):
-    question_id = models.CharField(max_length=255, unique=True)
-    module_tag = models.CharField(max_length=100)
-    difficulty = models.CharField(max_length=50)
 
 class Badge(models.Model):
     name = models.CharField(max_length=255, unique=True)

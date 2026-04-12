@@ -39,14 +39,22 @@ def setup_production():
     except Exception as e:
         print(f"❌ Error seeding placement quiz: {e}")
 
-    # 4. Seed Curriculum Data (Lessons, Modules, Challenges)
+    # 4. Seed Curriculum Data (Lessons, Modules)
     print("📚 Seeding Curriculum Data...")
     try:
-        # We run it with --reset to clean up any old/incorrect module IDs from previous deploys.
-        call_command('seed_curriculum_data', reset=True)
+        # We removed reset=True to persist AI-generated content across deploys.
+        call_command('seed_curriculum_data')
         print("✅ Curriculum data seeded.")
     except Exception as e:
         print(f"❌ Error seeding curriculum data: {e}")
+
+    # 4b. Update Challenges (Ensures high-quality code problems)
+    print("🏁 Updating Lesson Challenges...")
+    try:
+        call_command('update_lesson_challenges')
+        print("✅ Challenges updated.")
+    except Exception as e:
+        print(f"❌ Error updating challenges: {e}")
 
     # 5. Seed Platform Data (Additional items)
     print("🛠️ Seeding Platform Data...")

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserProgress, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserProgress, UserMastery
 from .models import CertificateTemplate
 
 @admin.register(User)
@@ -167,35 +167,7 @@ class UserMasteryAdmin(admin.ModelAdmin):
         (None, {'fields': ('user', 'module_id', 'mastery_score', 'last_source')}),
     )
 
-@admin.register(DiagnosticAttempt)
-class DiagnosticAttemptAdmin(admin.ModelAdmin):
-    list_display = ('user', 'quiz_id', 'score_percent', 'created_at')
-    list_filter = ('quiz_id', 'created_at', 'user')
-    search_fields = ('user__username',)
-    raw_id_fields = ('user',)
-    actions_on_top = False
-    actions_on_bottom = True
-    fieldsets = (
-        (None, {'fields': ('user', 'quiz_id', 'overall_score', 'module_scores')}),
-        ('Timestamps', {'fields': ('created_at',)}),
-    )
-    readonly_fields = ('created_at',)
 
-    def score_percent(self, obj):
-        return f"{round(obj.overall_score, 1)}%"
-    score_percent.short_description = 'Overall Score'
-    score_percent.admin_order_field = 'overall_score'
-
-@admin.register(DiagnosticQuestionMeta)
-class DiagnosticQuestionMetaAdmin(admin.ModelAdmin):
-    list_display = ('question_id', 'module_tag', 'difficulty')
-    list_filter = ('module_tag', 'difficulty')
-    search_fields = ('question_id', 'module_tag')
-    actions_on_top = False
-    actions_on_bottom = True
-    fieldsets = (
-        (None, {'fields': ('question_id', 'module_tag', 'difficulty')}),
-    )
 
 @admin.register(CertificateTemplate)
 class CertificateTemplateAdmin(admin.ModelAdmin):

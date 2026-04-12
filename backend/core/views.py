@@ -1,10 +1,10 @@
 from django.contrib.auth import authenticate, login, logout
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import UserSerializer, ProgressSerializer, QuizAttemptSerializer, BadgeSerializer, CertificateSerializer, RecommendationSerializer, ChatMessageSerializer, ModuleSerializer, LessonSerializer, UserProgressSerializer, QuizSerializer, QuestionSerializer, ChallengeSerializer, UserMasterySerializer, DiagnosticAttemptSerializer, DiagnosticQuestionMetaSerializer
+from .serializers import UserSerializer, ProgressSerializer, QuizAttemptSerializer, BadgeSerializer, CertificateSerializer, RecommendationSerializer, ChatMessageSerializer, ModuleSerializer, LessonSerializer, UserProgressSerializer, QuizSerializer, QuestionSerializer, ChallengeSerializer, UserMasterySerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -128,21 +128,21 @@ def _lesson_lock_message(user, lesson):
     if not _module_unlocked(user, module):
         previous_module = Module.objects.filter(order=module.order - 1).first()
         if previous_module:
-            return f"Complete {previous_module.title} to unlock {module.title}."
-        return f"{module.title} is not unlocked yet."
+            return f"Finish all of '{previous_module.title}' first to unlock the '{module.title}' module."
+        return f"The '{module.title}' module is not unlocked yet."
     if lesson.order == 1 and not _prerequisites_met(user, lesson.id):
-        return "Complete the required prerequisite lessons first."
+        return "Requires completion of prerequisite modules or lessons."
     if lesson.order > 1:
         previous_lessons = Lesson.objects.filter(module_id=lesson.module_id, order=lesson.order - 1)
-        prev_ids = list(previous_lessons.values_list("id", flat=True))
-        if prev_ids and not UserProgress.objects.filter(
+        prev_names = [l.title for l in previous_lessons]
+        if prev_names and not UserProgress.objects.filter(
             user_id=_progress_user_id(user),
-            lesson_id__in=prev_ids,
+            lesson_id__in=[l.id for l in previous_lessons],
             completed=True,
         ).exists():
-            return "Complete the previous lesson to unlock this one."
+            return f"Complete '{prev_names[0]}' to unlock this lesson."
     if not _prerequisites_met(user, lesson.id):
-        return "Complete the required prerequisite lessons first."
+        return "Required prerequisites for this lesson have not been met."
     return None
 
 def _module_lock_message(user, module):
@@ -273,19 +273,36 @@ def _unlocked_lesson_ids(user):
     if not unlocked_modules:
         return []
     user_id = _progress_user_id(user)
+    
+    # Bulk fetch all candidate lessons for these modules
+    # and all progress for this user across these lessons to avoid N+1
+    all_candidate_lessons = list(Lesson.objects.filter(module_id__in=unlocked_modules).order_by("order"))
+    all_completed_ids = set(UserProgress.objects.filter(
+        user_id=user_id,
+        completed=True
+    ).values_list("lesson_id", flat=True))
+    
+    # Cache user difficulty for each module to avoid repeated calls to get_user_module_difficulty
+    diff_cache = {}
+    for m_id in unlocked_modules:
+        diff_cache[m_id] = get_user_module_difficulty(user, m_id).lower()
+
     unlocked_ids = []
-    for module_id in unlocked_modules:
-        lesson_ids = _lesson_ids_for_user_module(user, module_id)
-        lessons = list(Lesson.objects.filter(id__in=lesson_ids).order_by("order"))
-        completed_ids = set(UserProgress.objects.filter(
-            user_id=user_id,
-            lesson_id__in=[lesson.id for lesson in lessons],
-            completed=True,
-        ).values_list("lesson_id", flat=True))
-        for lesson in lessons:
-            # Find previous lesson in the current module's ordered list
-            previous = next((l for l in reversed(lessons) if l.order < lesson.order), None)
-            if (not previous or previous.id in completed_ids) and _prerequisites_met(user, lesson.id):
+    # Group lessons by module manually for order-preserving logic
+    from collections import defaultdict
+    lessons_by_module = defaultdict(list)
+    for l in all_candidate_lessons:
+        lessons_by_module[l.module_id].append(l)
+
+    for module_id, lessons in lessons_by_module.items():
+        # Only include lessons that match user's adaptive difficulty for this module
+        target_diff = diff_cache.get(module_id)
+        filtered_lessons = [l for l in lessons if (l.difficulty or "Beginner").lower() == target_diff]
+        
+        for lesson in filtered_lessons:
+            # Find previous lesson in the current module's difficulty-specific list
+            previous = next((l for l in reversed(filtered_lessons) if l.order < lesson.order), None)
+            if (not previous or previous.id in all_completed_ids) and _prerequisites_met(user, lesson.id):
                 unlocked_ids.append(lesson.id)
     return unlocked_ids
 
@@ -963,81 +980,6 @@ class RecommendationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
 
-class DiagnosticSubmitView(APIView):
-    permission_classes = (permissions.IsAuthenticated,)
-
-    def post(self, request):
-        quiz_id = request.data.get("quizId")
-        answers = request.data.get("answers", [])
-        if not quiz_id or not isinstance(answers, list):
-            return Response({"message": "quizId and answers are required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        questions = list(Question.objects.filter(quiz_id=quiz_id))
-        if not questions:
-            return Response({"message": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        answers_map = {}
-        for answer in answers:
-            q_id = answer.get("questionId")
-            selected_index = answer.get("selectedIndex")
-            if q_id is not None:
-                # Convert to string to match Question.id (which is a CharField)
-                answers_map[str(q_id)] = selected_index
-
-        module_totals = {}
-        module_correct = {}
-        total_questions = 0
-        correct_answers = 0
-
-        for question in questions:
-            # question.id is already a string
-            meta = DiagnosticQuestionMeta.objects.filter(question_id=question.id).first()
-            if not meta:
-                continue
-            module_tag = meta.module_tag
-            options = question.options or []
-            correct_index = None
-            for idx, opt in enumerate(options):
-                if opt.get("correct"):
-                    correct_index = idx
-                    break
-            total_questions += 1
-            module_totals[module_tag] = module_totals.get(module_tag, 0) + 1
-            selected_index = answers_map.get(question.id)
-            if selected_index is not None and correct_index is not None and int(selected_index) == int(correct_index):
-                correct_answers += 1
-                module_correct[module_tag] = module_correct.get(module_tag, 0) + 1
-
-        if total_questions == 0:
-            return Response({"message": "No diagnostic questions available"}, status=status.HTTP_400_BAD_REQUEST)
-
-        module_scores = {}
-        for module_tag, total in module_totals.items():
-            score = (module_correct.get(module_tag, 0) / total) * 100
-            module_scores[module_tag] = round(score, 2)
-
-        overall_score = round((correct_answers / total_questions) * 100, 2)
-
-        DiagnosticAttempt.objects.create(
-            user=request.user,
-            quiz_id=quiz_id,
-            module_scores=module_scores,
-            overall_score=overall_score,
-        )
-
-        for module_tag, score in module_scores.items():
-            module = Module.objects.filter(title__iexact=module_tag).first()
-            if module:
-                update_user_mastery(request.user, module.id, score, "diagnostic")
-        request.user.diagnostic_completed = True
-        request.user.has_taken_quiz = True
-        request.user.save(update_fields=["diagnostic_completed", "has_taken_quiz"])
-
-        return Response({
-            "moduleScores": module_scores,
-            "overallScore": overall_score,
-            "masteryVector": request.user.mastery_vector or {},
-        })
 
 class MasteryUpdateView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
@@ -1336,6 +1278,20 @@ class SubmitQuizView(APIView):
                     module=module.title,
                     defaults={"pdf_path": f"/certificate/{module_id}"}
                 )
+                
+                # Award module-specific badges
+                badge_map = {
+                    "mod-introduction": "python-pioneer",
+                    "mod-data-types": "data-detective",
+                    "mod-control-flow": "logic-lord",
+                    "mod-loops-iteration": "iterative-icon",
+                    "mod-functions-scope": "code-architect",
+                    "mod-modules-packages": "oop-overlord"
+                }
+                badge_code = badge_map.get(module_id)
+                if badge_code:
+                    award_badge(user, badge_code)
+
                 # Check for "Master of Python" (all modules done)
                 total_modules = Module.objects.count()
                 user_certs = Certificate.objects.filter(user=user).exclude(module="Master of Python").count()
