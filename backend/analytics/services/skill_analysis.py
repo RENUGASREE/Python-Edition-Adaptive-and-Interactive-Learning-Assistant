@@ -70,7 +70,7 @@ def analyze_user_skill_gaps(user: User) -> Tuple[Dict[str, float], Dict[str, str
     
     # 3. Learning plan generation with cooldown
     last_plan = LearningPlan.objects.filter(user=user).order_by('id').last()
-    if not last_plan or (now - last_plan.created_at).total_seconds() > 3600: # 1 hour cooldown
+    if not last_plan or (now - last_plan.generated_at).total_seconds() > 3600: # 1 hour cooldown
         _generate_learning_plan(user, accuracy_map, status_map)
         
     return accuracy_map, status_map

@@ -13,36 +13,13 @@ from .models import UserTopicBehavior, DifficultyShift
 logger = logging.getLogger("recommendation.engine")
 
 
-# --- Topic Normalization ---
-_CANONICAL_TOPICS = {
-    "variables",
-    "conditions",
-    "loops",
-    "functions",
-    "data_structures",
-    "oop",
-}
-
-_TOPIC_SYNONYMS = {
-    "variables": ["variable", "data types", "data_types", "basics: variables"],
-    "conditions": ["conditionals", "if_statement", "if-else", "if_else", "elif_ladder", "if", "if/else"],
-    "loops": ["for_loop", "while_loop", "iteration", "looping"],
-    "functions": ["methods", "def_function", "function_basics"],
-    "data_structures": ["lists", "tuples", "dicts", "dictionaries", "sets", "data-structures"],
-    "oop": ["object_oriented_programming", "object-oriented", "classes", "class_basics", "objects"],
-}
-
-_ALIAS_TO_CANONICAL = {}
-for canon, aliases in _TOPIC_SYNONYMS.items():
-    _ALIAS_TO_CANONICAL[canon] = canon
-    for a in aliases:
-        _ALIAS_TO_CANONICAL[a] = canon
-
-
-def normalize_topic(topic: str | None) -> str:
-    raw = (topic or "").strip().lower()
-    key = raw.replace(" ", "_").replace("-", "_")
-    return _ALIAS_TO_CANONICAL.get(key, key if key in _CANONICAL_TOPICS else key)
+from core.adaptive import (
+    normalize_topic, 
+    normalize_level, 
+    get_user_module_difficulty, 
+    _CANONICAL_TOPICS, 
+    _TOPIC_SYNONYMS
+)
 
 
 def compute_priority_score(mastery, recent_failure_rate, prereq_weight, engagement_factor, difficulty_adjustment_factor, velocity_weight, struggle_weight):

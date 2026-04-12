@@ -1,11 +1,10 @@
 """Assessment scoring and interaction logging used by adaptive engines."""
 from typing import Dict, List, Tuple
 from core.models import User
-from core.adaptive import QUIZ_TOPIC_MODULE_MAP, difficulty_for_score, normalize_level
+from core.adaptive import QUIZ_TOPIC_MODULE_MAP, difficulty_for_score, normalize_level, normalize_topic
 from ai_engine.services import apply_bkt_update
 from users.services import update_engagement
 from .models import DiagnosticQuestion, AssessmentInteraction
-from recommendation.services import update_behavior_from_interaction, update_topic_velocity, normalize_topic
 
 
 def _difficulty_tier(weighted_score_pct: float) -> str:
@@ -131,6 +130,8 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
 
 
 def log_assessment_interaction(user: User, topic: str, correctness: bool, time_spent: float, hints_used: int, source: str):
+    from recommendation.services import update_behavior_from_interaction, update_topic_velocity
+    
     AssessmentInteraction.objects.create(
         user=user,
         topic=topic,
