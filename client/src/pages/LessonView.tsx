@@ -121,10 +121,10 @@ export default function LessonView() {
   const placementCompleted = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
   const allLessons = useMemo(() => {
     if (!modules) return [];
-    const fallback = user?.level || "Beginner";
     return (modules as any[])
       .flatMap((m: any) => {
-        const targetLevel = moduleLevels[m.id] || fallback;
+        // Strictly use placement-assigned level for each module; default to Beginner
+        const targetLevel = moduleLevels[m.id] || "Beginner";
         const filtered = (m.lessons || []).filter((l: any) => normalizeLevel(l.difficulty || "Beginner") === normalizeLevel(targetLevel));
         const lessons = filtered.length > 0 ? filtered : (m.lessons || []);
         return lessons.map((l: any) => ({ ...l, moduleOrder: m.order }));
@@ -133,7 +133,7 @@ export default function LessonView() {
         if (a.moduleOrder !== b.moduleOrder) return a.moduleOrder - b.moduleOrder;
         return (a.order || 0) - (b.order || 0);
       });
-  }, [modules, moduleLevels, user?.level]);
+  }, [modules, moduleLevels]);
   const firstLessonId = allLessons[0]?.id || "";
 
   const currentLessonIndex = allLessons.findIndex(l => l.id === lessonId);
@@ -147,8 +147,8 @@ export default function LessonView() {
   const isModuleCompleted = (moduleId: string) => {
     const module = (modules as any[])?.find(m => m.id === moduleId);
     if (!module || !module.lessons || module.lessons.length === 0) return false;
-    const fallback = user?.level || "Beginner";
-    const targetLevel = moduleLevels[moduleId] || fallback;
+    // Strictly use placement-assigned level; default to Beginner
+    const targetLevel = moduleLevels[moduleId] || "Beginner";
     const filtered = (module.lessons as any[]).filter((l: any) => normalizeLevel(l.difficulty || "Beginner") === normalizeLevel(targetLevel));
     const lessons = filtered.length > 0 ? filtered : (module.lessons as any[]);
     return lessons.every(l => isLessonCompleted(l.id));

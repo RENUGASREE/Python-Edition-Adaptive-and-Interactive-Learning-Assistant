@@ -71,6 +71,8 @@ export default function PlacementQuiz() {
   const lastViolationTsRef = useMemo(() => ({ ts: 0 }), []);
   const isSubmittingRef = useRef(false);
   const hasSubmittedRef = useRef(false);
+  const [hasStartedAnswering, setHasStartedAnswering] = useState(false);
+  const phaseRef = useRef<"intro" | "active" | "resume">("intro");
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -97,7 +99,14 @@ export default function PlacementQuiz() {
     bootstrap();
   }, [diagnostic]);
 
+  // Keep phaseRef in sync so timer effect can read current phase without re-registering
   useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  // Only tick the clock when the quiz is active
+  useEffect(() => {
+    if (phase !== "active") return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -108,7 +117,7 @@ export default function PlacementQuiz() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [phase]);
 
   useEffect(() => {
     const registerViolation = () => {
@@ -169,6 +178,8 @@ export default function PlacementQuiz() {
 
   useEffect(() => {
     const VIOLATION_LIMIT = 5;
+    // Never auto-submit if user hasn't started answering — prevents blank quiz from firing
+    if (!hasStartedAnswering) return;
     if (violationCount >= VIOLATION_LIMIT && !expired) {
       setExpired(true);
       if (attemptId && !hasSubmittedRef.current) {
@@ -179,7 +190,7 @@ export default function PlacementQuiz() {
         handleSubmit(true);
       }
     }
-  }, [violationCount, expired, attemptId]);
+  }, [violationCount, expired, attemptId, hasStartedAnswering]);
 
   // No onboarding modal; banner handled on Dashboard
 
@@ -189,6 +200,7 @@ export default function PlacementQuiz() {
 
   const handleSelect = (questionId: string, optionIndex: number) => {
     if (expired) return;
+    setHasStartedAnswering(true);
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   };
 

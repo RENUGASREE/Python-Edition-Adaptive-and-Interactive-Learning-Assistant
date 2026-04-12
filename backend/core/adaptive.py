@@ -125,11 +125,15 @@ def get_module_difficulty_map(user) -> dict[str, str]:
 
 
 def get_user_module_difficulty(user, module_id: str, default: str | None = None) -> str:
+    """Return the difficulty tier for a module based strictly on the user's placement score.
+    If the module was not covered by the diagnostic, returns 'Beginner' (not the user's global level).
+    """
     difficulty_map = get_module_difficulty_map(user)
     for key in module_lookup_keys(module_id):
         if key in difficulty_map:
             return difficulty_map[key]
-    return normalize_level(default or getattr(user, "level", None))
+    # Module not scored in diagnostic — default to Beginner (strict adaptive policy)
+    return normalize_level(default or "Beginner")
 
 
 def update_user_module_mastery(user, module_id: str, score: float, source: str) -> float:
