@@ -4,7 +4,7 @@ from django.db import transaction
 from core.models import Lesson, Quiz, Question, Challenge
 
 LESSONS = {
-    "les-python-basics-6-beginner": {
+    "m1-8-comments-style-beginner-beginner": {
         "title": "Comments & Code Style (PEP 8)",
         "content": """# Comments & Code Style (PEP 8)
 
@@ -70,7 +70,7 @@ def greet(name):
         },
     },
 
-    "les-python-basics-6-intermediate": {
+    "m1-8-comments-style-intermediate-intermediate": {
         "title": "Type Hints, Annotations & linting Tools",
         "content": """# Type Hints, Annotations & Linting Tools
 
@@ -136,7 +136,7 @@ flake8 my_file.py       # check style errors
         },
     },
 
-    "les-python-basics-6-pro": {
+    "m1-8-comments-style-pro-pro": {
         "title": "AST Inspection, Code Generation & Metaprogramming",
         "content": """# AST Inspection, Code Generation & Metaprogramming
 
@@ -620,7 +620,7 @@ print(result)
     },
 
     # ── Lesson 9: String Formatting ──────────────────────────────────────────
-    "les-python-basics-9-beginner": {
+    "m1-9-debugging-basics-beginner-beginner": {
         "title": "String Formatting with f-strings",
         "content": """# String Formatting with f-strings
 
@@ -684,7 +684,7 @@ print(f"{10 > 5}")            # True
         },
     },
 
-    "les-python-basics-9-intermediate": {
+    "m1-9-debugging-basics-intermediate-intermediate": {
         "title": "Template Strings, .format() & Format Mini-Language",
         "content": """# Template Strings, .format() & Format Mini-Language
 
@@ -753,7 +753,7 @@ print(t.substitute(name="Alice", score=95))
         },
     },
 
-    "les-python-basics-9-pro": {
+    "m1-9-debugging-basics-pro-pro": {
         "title": "Custom __format__, PEP 701 & Lazy String Interpolation",
         "content": """# Custom __format__, f-string Debugging & Lazy Interpolation
 
@@ -827,7 +827,7 @@ print(msg)   # evaluated NOW
     },
 
     # ── Lesson 10: Mini Project ──────────────────────────────────────────────
-    "les-python-basics-10-beginner": {
+    "m1-10-mini-project-greeting-app-beginner-beginner": {
         "title": "Mini Project: Command-Line Calculator",
         "content": """# Mini Project: Command-Line Calculator
 
@@ -901,7 +901,7 @@ print(f"Result: {result}")
         },
     },
 
-    "les-python-basics-10-intermediate": {
+    "m1-10-mini-project-greeting-app-intermediate-intermediate": {
         "title": "Mini Project: Expression Evaluator",
         "content": """# Mini Project: Expression Evaluator
 
@@ -966,7 +966,7 @@ print(f"Result: {safe_calc(expr)}")
         },
     },
 
-    "les-python-basics-10-pro": {
+    "m1-10-mini-project-greeting-app-pro-pro": {
         "title": "Mini Project: Recursive Descent Parser",
         "content": """# Mini Project: Recursive Descent Parser
 
@@ -1073,7 +1073,7 @@ class Command(BaseCommand):
                     content=data["content"],
                 )
                 if not updated:
-                    self.stdout.write(self.style.WARNING(f"  ⚠  Not found: {lesson_id}"))
+                    self.stdout.write(self.style.WARNING(f"  [WARN]  Not found: {lesson_id}"))
                     continue
 
                 quiz, _ = Quiz.objects.get_or_create(
@@ -1090,11 +1090,12 @@ class Command(BaseCommand):
                 ch = data["challenge"]
                 Challenge.objects.filter(lesson_id=lesson_id).delete()
                 Challenge.objects.create(
+                    id=f"ch-{lesson_id}",
                     lesson_id=lesson_id, title=ch["title"], description=ch["description"],
                     initial_code=ch["initial_code"], solution_code=ch["solution_code"],
                     test_cases=ch["test_cases"], points=20,
                 )
                 count += 1
-                self.stdout.write(f"  ✅ {lesson_id}")
+                self.stdout.write(f"  OK {lesson_id}")
 
-        self.stdout.write(self.style.SUCCESS(f"\n🎉 Hydrated {count} lessons (6-10) in Module 1"))
+        self.stdout.write(self.style.SUCCESS(f"\nDONE Hydrated {count} lessons (6-10) in Module 1"))

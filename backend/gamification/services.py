@@ -19,6 +19,13 @@ def ensure_badges():
         ("loop-master", "Loop Master", "Maintain a 5-day learning streak."),
         ("function-pro", "Function Pro", "Earn 200 XP from practice."),
         ("consistent-learner", "Consistent Learner", "Complete 10 lessons."),
+        ("python-pioneer", "Python Pioneer", "Complete all lessons in Module 1."),
+        ("data-detective", "Data Detective", "Complete all lessons in Module 2."),
+        ("logic-lord", "Logic Lord", "Complete all lessons in Module 3."),
+        ("iterative-icon", "Iterative Icon", "Complete all lessons in Module 4."),
+        ("code-architect", "Code Architect", "Complete all lessons in Module 5."),
+        ("oop-overlord", "OOP Overlord", "Complete all lessons in Module 6."),
+        ("topic-wizard", "Topic Wizard", "Reach 95% mastery in any specific topic."),
     ]
     for code, title, description in badges:
         Badge.objects.get_or_create(code=code, defaults={"title": title, "description": description})

@@ -13,20 +13,18 @@ class DiagnosticQuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DiagnosticQuestion
-        fields = ("id", "quiz", "topic", "difficulty", "text", "options", "correct_index", "points")
+        fields = ("id", "quiz", "topic", "difficulty", "text", "options", "points")
 
     def get_options(self, obj):
-        import random
-        # Prefer related DiagnosticOption records; fallback to JSONField if present
-        opts = list(DiagnosticOption.objects.filter(question=obj).values("text", "is_correct"))
+        opts = list(
+            DiagnosticOption.objects.filter(question=obj)
+            .order_by("id")  # Always stable order — matches correct_index
+            .values("id", "text")
+        )
         if not opts:
             raw = obj.options or []
-            opts = [{"text": str(t), "is_correct": (i == obj.correct_index)} for i, t in enumerate(raw)]
-        
-        # Shuffle the combined options list
-        shuffled = list(opts)
-        random.shuffle(shuffled)
-        return shuffled
+            opts = [{"id": f"raw-{obj.id}-{i}", "text": str(t)} for i, t in enumerate(raw)]
+        return opts
 
 
 class DiagnosticAttemptSerializer(serializers.ModelSerializer):

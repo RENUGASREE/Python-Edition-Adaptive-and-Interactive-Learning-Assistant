@@ -2,12 +2,13 @@ import re
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserProgress, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, Quiz, Question, Challenge, UserProgress, UserMastery
 from lessons.models import LessonProfile
 from django.db.models import Sum
 from datetime import timedelta
 from django.utils import timezone
 from gamification.models import XpEvent, Streak
+from core.adaptive import get_user_module_difficulty, normalize_level, progress_user_id
 from recommendation.services import normalize_topic
 
 class UserSerializer(serializers.ModelSerializer):
@@ -222,7 +223,7 @@ class QuizSerializer(serializers.ModelSerializer):
         return QuestionSerializer(questions, many=True).data
 
 class ChallengeSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(read_only=True) # Table challenges uses serial ID
+    id = serializers.CharField(read_only=True)
     lessonId = serializers.CharField(source='lesson_id')
     initialCode = serializers.CharField(source='initial_code')
     solutionCode = serializers.CharField(source='solution_code', required=False)
@@ -365,28 +366,12 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class SimpleLessonSerializer(serializers.ModelSerializer):
     moduleId = serializers.CharField(source='module_id')
-    topic = serializers.SerializerMethodField()
-    prerequisites = serializers.SerializerMethodField()
-    embeddingVector = serializers.SerializerMethodField()
+    unlocked = serializers.BooleanField(default=False)
+    completed = serializers.BooleanField(default=False)
 
     class Meta:
         model = Lesson
-        fields = ('id', 'moduleId', 'title', 'slug', 'content', 'order', 'difficulty', 'duration', 'topic', 'prerequisites', 'embeddingVector')
-
-    def _profile(self, obj):
-        return LessonProfile.objects.filter(lesson_id=obj.id).first()
-
-    def get_topic(self, obj):
-        profile = self._profile(obj)
-        return normalize_topic(profile.topic) if profile else None
-
-    def get_prerequisites(self, obj):
-        profile = self._profile(obj)
-        return profile.prerequisites if profile else []
-
-    def get_embeddingVector(self, obj):
-        profile = self._profile(obj)
-        return profile.embedding_vector if profile else []
+        fields = ('id', 'moduleId', 'title', 'slug', 'order', 'difficulty', 'duration', 'unlocked', 'completed')
 
 class ModuleSerializer(serializers.ModelSerializer):
     imageUrl = serializers.CharField(source='image_url', required=False)
@@ -418,95 +403,70 @@ class ModuleSerializer(serializers.ModelSerializer):
         ).exists()
 
     def get_lessons(self, obj):
-        # ... (keep existing implementation)
         request = self.context.get("request")
         user = request.user if request else None
         if not user or not user.is_authenticated:
             return []
+
+        target_level = get_user_module_difficulty(user, str(obj.id), default=user.level or "Beginner")
+        lessons_by_module = self.context.get("module_lessons_map") or {}
+        module_lessons = list(lessons_by_module.get(str(obj.id), []))
         
-        # Step 1: Check pre-calculated context (Performance Optimization)
-        # This prevents redundant database scans for each module in the list
-        precalculated = self.context.get("precalculated_difficulties", {})
+        # 1. Try exact match
+        lessons = [lesson for lesson in module_lessons if normalize_level(lesson.difficulty) == target_level]
         
-        assigned_difficulty = None
-        # Support both dashed and underscored module IDs for robustness
-        mod_id = str(obj.id)
-        search_keys = [mod_id, mod_id.replace("-", "_")]
-        
-        # Special case mappings from diagnostic quiz keys to module IDs
-        special_mappings = {
-            "mod-python-basics": ["mod_introduction", "mod-introduction"],
-            "mod-data-types": ["mod_variables_types", "mod-variables-types"],
-            "mod-control-flow": ["mod_control_flow", "mod_loops_iteration", "mod-loops-iteration"],
-            "mod-functions": ["mod_functions_scope", "mod-functions-scope"],
-            "mod-modules-packages": ["mod_file_handling", "mod-error-handling", "mod-file-handling", "mod-error-handling"],
-        }
-        if mod_id in special_mappings:
-            search_keys.extend(special_mappings[mod_id])
+        # 2. If no exact match, try to find the "closest" difficulty
+        if not lessons and module_lessons:
+            # Difficulty hierarchy
+            ranks = {"Beginner": 1, "Intermediate": 2, "Pro": 3}
+            target_rank = ranks.get(target_level, 1)
             
-        for sk in search_keys:
-            # Support both original case and lowercase matching for maximum robustness
-            if sk in precalculated:
-                assigned_difficulty = precalculated[sk]
-                break
-            if sk.lower() in precalculated:
-                assigned_difficulty = precalculated[sk.lower()]
-                break
-        
-        if not assigned_difficulty:
-            # Step 2: Fallback to old mastery_vector check (safety mechanism)
-            mastery_vector = user.mastery_vector or {}
-            difficulty_map = mastery_vector.get("_module_difficulty", {})
-            for sk in search_keys:
-                if sk in difficulty_map:
-                    assigned_difficulty = difficulty_map[sk]
-                    break
-        
-        if not assigned_difficulty:
-            # Step 3: Final fallback to legacy quiz attempt logs
-            from .models import QuizAttempt as CoreQuizAttempt
-            attempts = CoreQuizAttempt.objects.filter(user=user).order_by("completed_at")
-            for attempt in attempts:
-                notes = attempt.notes or ""
-                # Support both numeric and slug-based module IDs (e.g., mod-python-basics)
-                match = re.search(r"module:([\w-]+):level:([A-Za-z]+)", notes)
-                if match and match.group(1).lower() == str(obj.id).lower():
-                    assigned_difficulty = match.group(2)
-        
-        target_level = assigned_difficulty or user.level or "Beginner"
-        normalized = target_level.strip().lower()
-        if normalized in ("pro", "advanced"):
-            normalized = "Pro"  # Database uses "Pro"
-        elif normalized == "intermediate":
-            normalized = "Intermediate"
-        else:
-            normalized = "Beginner"
+            # Find all available difficulties for this module
+            available_ranks = sorted(list(set(ranks.get(normalize_level(l.difficulty), 1) for l in module_lessons)))
             
-        lessons = list(Lesson.objects.filter(module_id=obj.id, difficulty=normalized).order_by('order'))
+            if available_ranks:
+                # Find the rank closest to target_rank
+                best_rank = min(available_ranks, key=lambda r: abs(r - target_rank))
+                lessons = [lesson for lesson in module_lessons if ranks.get(normalize_level(lesson.difficulty), 1) == best_rank]
+
+        # 3. Ultimate fallback to ensure module is never empty if lessons exist in DB
         if not lessons:
-            lessons = list(Lesson.objects.filter(module_id=obj.id).order_by('order'))
-            
-        user_id = user.original_uuid or str(user.id)
-        completed_ids = set(UserProgress.objects.filter(
-            user_id=user_id,
-            lesson_id__in=[lesson.id for lesson in lessons],
-            completed=True,
-        ).values_list("lesson_id", flat=True))
+            lessons = module_lessons or list(Lesson.objects.filter(module_id=obj.id).order_by("order", "id"))
+
+        completed_ids = set(self.context.get("completed_lesson_ids") or [])
         
-        prereq_map = {
-            item["lesson_id"]: (item["prerequisites"] or [])
-            for item in LessonProfile.objects.filter(lesson_id__in=[lesson.id for lesson in lessons]).values("lesson_id", "prerequisites")
-        }
-        
+        from .views import _module_unlocked
+        module_is_locked = not _module_unlocked(user, obj)
+
         unlocked = []
-        for idx, lesson in enumerate(lessons):
-            from .views import _lesson_unlocked
-            is_unlocked = _lesson_unlocked(user, lesson)
-            
-            # Use SimpleLessonSerializer if LessonSerializer causes circular issues
-            data = LessonSerializer(lesson, context=self.context).data
+        for lesson in lessons:
+            is_unlocked = False
+            if not module_is_locked:
+                if lesson.order == 1:
+                    is_unlocked = True
+                else:
+                    prev_lessons = [l.id for l in module_lessons if l.order == lesson.order - 1]
+                    if not prev_lessons:
+                        is_unlocked = True
+                    else:
+                        is_unlocked = any(str(pid) in completed_ids for pid in prev_lessons)
+
+            from .views import _prerequisites_met
+            # The prerequisite DB logic here is still marginally acceptable since we already bypass the module N+1
+            if is_unlocked:
+                 # Check explicit prereq overrides if present via profile map in context!
+                 profile_map = self.context.get("lesson_prereq_map", {})
+                 prereqs = profile_map.get(lesson.id, [])
+                 if prereqs:
+                     # Check if ALL prerequisites are fulfilled
+                     # For each prereq id (which could be another lesson slug), we need to ensure it's completed
+                     # Or any equivalent difficulty. To keep it fully fast, we just do a simplified check:
+                     is_unlocked = all(str(pr_id) in completed_ids for pr_id in prereqs)
+
+            serializer = SimpleLessonSerializer(lesson, context=self.context)
+            data = serializer.data
             data["unlocked"] = is_unlocked
-            data["completed"] = lesson.id in completed_ids
+            data["completed"] = str(lesson.id) in completed_ids
             unlocked.append(data)
         return unlocked
 
@@ -537,16 +497,6 @@ class ProgressSerializer(serializers.ModelSerializer):
 class UserMasterySerializer(serializers.ModelSerializer):
     class Meta:
         model = UserMastery
-        fields = '__all__'
-
-class DiagnosticAttemptSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DiagnosticAttempt
-        fields = '__all__'
-
-class DiagnosticQuestionMetaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DiagnosticQuestionMeta
         fields = '__all__'
 
 class QuizAttemptSerializer(serializers.ModelSerializer):

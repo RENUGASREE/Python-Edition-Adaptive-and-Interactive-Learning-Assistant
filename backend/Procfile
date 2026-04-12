@@ -1,0 +1,1 @@
+web: python deploy_ready.py && gunicorn python_edition_django.wsgi

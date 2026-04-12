@@ -99,9 +99,9 @@ export default function Curriculum() {
 
   const allLessons = useMemo(() => {
     if (!modules) return [];
-    const fallback = user?.level || "Beginner";
     return (modules as any[]).flatMap((m: any) => {
-      const targetLevel = moduleLevels[m.id] || fallback;
+      // Strictly use the placement-assigned level for this module; default to Beginner
+      const targetLevel = moduleLevels[m.id] || "Beginner";
       const filtered = (m.lessons || []).filter((l: any) => normalizeLevel(l.difficulty || "Beginner") === normalizeLevel(targetLevel));
       const lessons = filtered.length > 0 ? filtered : (m.lessons || []);
       return lessons.map((l: any) => ({ ...l, moduleOrder: m.order }));
@@ -110,7 +110,7 @@ export default function Curriculum() {
         if (a.moduleOrder !== b.moduleOrder) return a.moduleOrder - b.moduleOrder;
         return (a.order || 0) - (b.order || 0);
       });
-  }, [modules, moduleLevels, user?.level]);
+  }, [modules, moduleLevels]);
 
   if (loadingModules || loadingProgress || loadingQuizAttempts) {
     return (
@@ -178,8 +178,8 @@ export default function Curriculum() {
   const isModuleCompleted = (moduleId: string) => {
     const module = (modules as any[])?.find(m => m.id === moduleId);
     if (!module || !module.lessons || module.lessons.length === 0) return false;
-    const fallback = user?.level || "Beginner";
-    const targetLevel = moduleLevels[moduleId] || fallback;
+    // Strictly use the placement-assigned level; default to Beginner
+    const targetLevel = moduleLevels[moduleId] || "Beginner";
     const filtered = (module.lessons as any[]).filter((l: any) => normalizeLevel(l.difficulty || "Beginner") === normalizeLevel(targetLevel));
     const lessons = filtered.length > 0 ? filtered : (module.lessons as any[]);
     return lessons.every(l => isLessonCompleted(l.id));
@@ -251,7 +251,7 @@ export default function Curriculum() {
             {modules?.map((module, index) => {
               const locked = isModuleLocked(module.id);
               const completed = isModuleCompleted(module.id);
-              const level = moduleLevels[module.id] || user?.level || "Beginner";
+              const level = moduleLevels[module.id] || "Beginner";
               return (
                 <div key={module.id} className="flex items-center gap-3">
                   <motion.div
@@ -283,12 +283,13 @@ export default function Curriculum() {
             const locked = isModuleLocked(module.id);
             const completed = isModuleCompleted(module.id);
             const isOpen = !!openModules[module.id];
-            const moduleLevel = moduleLevels[module.id] || user?.level || "Beginner";
+            const moduleLevel = moduleLevels[module.id] || "Beginner";
             const levelLabel = moduleLevel === "Advanced" ? "Pro" : moduleLevel;
             const moduleQuizCompleted = (quizAttempts || []).some((attempt: any) => attempt?.notes?.includes(`module:${module.id}:level:`));
             const moduleLessons = (module as any).lessons || [];
             const filteredLessons = moduleLessons.filter((l: any) => {
-              const target = moduleLevels[module.id] || user?.level || "Beginner";
+              // Strictly use placement-assigned level for this module
+              const target = moduleLevels[module.id] || "Beginner";
               return normalizeLevel(l.difficulty || "Beginner") === normalizeLevel(target);
             });
             const visibleLessons = filteredLessons.length > 0 ? filteredLessons : moduleLessons;

@@ -27,80 +27,136 @@ class LessonSpec:
 
 
 MODULES = [
-    (1, "Python Fundamentals", "Core syntax, variables, types, I/O, and basics to start writing Python confidently."),
-    (2, "Control Flow", "Conditionals and boolean logic to make programs make decisions."),
-    (3, "Loops", "Iteration patterns with for/while loops, range, and loop control."),
-    (4, "Functions", "Reusable functions, parameters, return values, scope, and basic testing."),
-    (5, "Data Structures", "Lists, tuples, sets, dictionaries, and common patterns."),
-    (6, "Object Oriented Programming", "Classes, objects, methods, inheritance, and design thinking."),
+    ("mod-python-basics", 1, "Python Fundamentals", "Core syntax, variables, types, I/O, and basics to start writing Python confidently."),
+    ("mod-control-flow", 2, "Control Flow", "Conditionals and boolean logic to make programs make decisions."),
+    ("mod-loops-iteration", 3, "Loops", "Iteration patterns with for/while loops, range, and loop control."),
+    ("mod-functions", 4, "Functions", "Reusable functions, parameters, return values, scope, and basic testing."),
+    ("mod-data-types", 5, "Data Structures", "Lists, tuples, sets, dictionaries, and common patterns."),
+    ("mod-modules-packages", 6, "Object Oriented Programming", "Classes, objects, methods, inheritance, and design thinking."),
 ]
 
 
 def _lesson_markdown(spec: LessonSpec) -> str:
-    # Store structured educational content in Lesson.content (markdown).
-    # The UI already renders markdown in `LessonView`.
-    example_code = {
-        "variables": 'name = "Alice"\nage = 21\nprint(name, age)\n',
-        "types": "x = 10\npi = 3.14\nflag = True\nprint(type(x), type(pi), type(flag))\n",
-        "input_output": 'name = input("Name? ")\nprint("Hello", name)\n',
-        "if_else": "x = 7\nif x % 2 == 0:\n    print('even')\nelse:\n    print('odd')\n",
-        "loops_for": "for i in range(3):\n    print(i)\n",
-        "loops_while": "n = 3\nwhile n > 0:\n    print(n)\n    n -= 1\n",
-        "functions_def": "def add(a, b):\n    return a + b\n\nprint(add(2, 3))\n",
-        "lists": "nums = [1, 2, 3]\nnums.append(4)\nprint(nums)\n",
-        "dicts": "scores = {'A': 90, 'B': 80}\nprint(scores['A'])\n",
-        "classes": "class Person:\n    def __init__(self, name):\n        self.name = name\n\np = Person('Alice')\nprint(p.name)\n",
-    }.get(spec.topic, "print('Hello, Python!')\n")
+    """
+    Generates premium, structured lesson content matching the user's requested style.
+    """
+    title = spec.title.replace(f" ({spec.difficulty})", "")
+    level = spec.difficulty
+    topic = spec.topic
 
-    output_text = {
-        "variables": "Alice 21",
-        "loops_for": "0\n1\n2",
-        "functions_def": "5",
-        "lists": "[1, 2, 3, 4]",
-        "dicts": "90",
-        "classes": "Alice",
-    }.get(spec.topic, "Hello, Python!")
+    # --- 1. Hook & Introduction ---
+    hooks = {
+        "input_output": "Input and Output (I/O) are how your program communicates with the outside world. Without them, your code would be a 'silent' box.",
+        "variables": "Variables are used to store data in a program so it can be reused, modified, and accessed later.",
+        "types": "Data types tell Python what kind of information you are working with, ensuring your calculations and logic remain accurate.",
+        "if_else": "Conditional statements allow your program to make decisions, branching its logic based on specific conditions.",
+        "loops_for": "Loops automate repetitive tasks, allowing you to process large amounts of data with just a few lines of code.",
+        "functions_def": "Functions are reusable blocks of logic that make your code modular, organized, and much easier to maintain.",
+        "lists": "Lists are ordered collections that allow you to manage groups of related data in a single, powerful container.",
+        "classes": "Classes are blueprints for creating objects, allowing you to model real-world entities directly in your code."
+    }
+    intro = hooks.get(topic, f"In this lesson, we explore **{title}**, a core pillar of Python development that builds your programming foundation.")
 
-    real_world = {
-        1: "Store user profile data, settings, and configuration values.",
-        2: "Validate user input and branch logic in applications.",
-        3: "Process lists of records and repeat tasks efficiently.",
-        4: "Organize code into reusable units and build clean APIs.",
-        5: "Represent real data (tables, mappings) and transform collections.",
-        6: "Model real-world entities and keep code maintainable as it grows.",
-    }.get(spec.module_order, "Use this concept to write clearer, reusable programs.")
+    # --- 2. Why This Matters ---
+    matters = {
+        "input_output": "Every interactive program depends on I/O - from simple CLI tools to complex web applications that handle user data.",
+        "variables": "Every program you write depends on storing and updating data - from user input to calculations and system state. Variables are the foundation of all programming logic.",
+        "types": "Data integrity prevents 90% of production bugs. Understanding types is non-negotiable for building reliable, professional software.",
+        "if_else": "Logic is the brain of your application. Branching allows for personalization, security checks, and complex business rules.",
+        "loops_for": "Scaling requires automation. Whether processing 10 records or 10 million, loops are the engine of data processing.",
+        "functions_def": "Clean, maintainable code is built on modularity. Functions allow teams to collaborate effectively on large-scale projects.",
+        "lists": "Real-world data is almost always a collection. From social media feeds to transaction history, everything happens in lists.",
+        "classes": "Scalability in large systems depends on Object-Oriented Design. Classes provide the blueprint for that scalability."
+    }
+    matter = matters.get(topic, "This concept is a building block for all advanced Python frameworks and professional software engineering.")
 
-    takeaways = {
-        "variables": [
-            "Variables don’t need type declarations in Python.",
-            "Names should be descriptive and follow snake_case.",
-            "Values can be reassigned at runtime.",
-        ],
-        "if_else": [
-            "Conditions evaluate to True/False.",
-            "Use elif for multiple branches.",
-            "Keep conditions readable with parentheses when needed.",
-        ],
-    }.get(spec.topic, ["Practice with a small example and confirm the output.", "Use this in a small real-world script."])
+    # --- 3. Concept Explanation (Level-Based) ---
+    explanations = {
+        "variables": {
+            "Beginner": "In Python, a variable is a **name that refers to a value stored in memory**.\n\nUnlike some other languages, Python is **dynamically typed**, which means:\n- You don't need to declare a type (int, string, etc.)\n- The type is automatically determined at runtime",
+            "Intermediate": "Variables in Python act as **symbolic names** that are references to objects. Python's dynamic typing means the variable itself has no type, but the object it points to does.\n\nKey behaviors:\n- Reassignment changes the reference, not the object itself\n- Multiple names can point to the same memory address",
+            "Pro": "Python variables are entries in a **namespace dictionary**. Understanding the difference between 'name binding' and 'assignment' is critical for optimizing memory and performance.\n\nDeep dive:\n- CPython uses reference counting for memory management\n- The `id()` function reveals the memory address of the object a variable points to"
+        },
+        "input_output": {
+            "Beginner": "I/O is the 'conversation' between the user and the computer. You use `input()` to listen and `print()` to speak.\n\nKey points:\n- `input()` always returns a string\n- `print()` can combine multiple values",
+            "Intermediate": "Python's I/O involves **Standard Streams**. `print()` writes to `sys.stdout` by default, while `input()` reads from `sys.stdin`.\n\nKey patterns:\n- Using f-strings for clean output formatting\n- Casting `input()` to `int` or `float` for calculations",
+            "Pro": "Professional I/O utilizes **Buffered Streams** and asynchronous patterns. In high-load environments, we avoid the overhead of `print()` in favor of the `logging` module or direct stream writes.\n\nConcepts:\n- Standard Error (`sys.stderr`) for fault reporting\n- Non-blocking I/O for scalable network services"
+        }
+    }
+    explanation = explanations.get(topic, {}).get(level, f"We'll explore how **{title}** works in Python, focusing on its syntax, behavior, and best practices for the **{level}** level.")
 
-    return "\n\n".join(
-        [
-            f"# {spec.title}",
-            f"**Topic**: `{spec.topic}`  \n**Difficulty**: `{spec.difficulty}`  \n**Estimated Duration**: {spec.duration} minutes",
-            "## Concept Explanation",
-            f"This lesson focuses on **{spec.title}** and how it fits into practical Python programming.",
-            "## Syntax",
-            "```python\n# See the example below\n```",
-            "## Example Code",
-            f"```python\n{example_code}```",
-            "## Output",
-            f"```\n{output_text}\n```",
-            "## Real-world Use Case",
-            real_world,
-            "## Key Takeaways",
-            "\n".join([f"- {t}" for t in takeaways]),
-        ]
-    )
+    # --- 4. Mental Models ---
+    models = {
+        "variables": {
+            "Beginner": "Think of a variable as a **label attached to a value**, not a box itself. The label can point to different values over time.",
+            "Intermediate": "Think of a variable as a **GPS Coordinate**. It doesn't contain the house (data); it just tells Python exactly where to find it in memory.",
+            "Pro": "Visualize a **Pointer in a Hash Map**. Namespaces are essentially dictionaries where names are keys and memory addresses are values."
+        }
+    }
+    model = models.get(topic, {}).get(level, f"Think of **{title}** as a specialized tool in your engineering toolkit - designed for a specific job, but powerful when combined with others.")
+
+    # --- 5. Code Examples ---
+    codes = {
+        "variables": {
+            "Beginner": "score = 0          # Assign initial value\nscore = score + 10 # Update value\nprint(score)       # Output: 10",
+            "Intermediate": "a, b = 5, 10      # Multiple assignment\na, b = b, a      # The Pythonic swap\nprint(f'a={a}, b={b}') # Output: a=10, b=5",
+            "Pro": "import sys\nx = [1, 2, 3]\ny = x\nprint(id(x) == id(y)) # True (same object)\nprint(sys.getrefcount(x)) # View internal reference count"
+        }
+    }
+    code = codes.get(topic, {}).get(level, f"# {level} example for {title}\nprint('Learning {title}...')")
+
+    # --- 6. Real-World Applications ---
+    apps = {
+        "Beginner": "Creating a simple calculator or a personal greeting script.",
+        "Intermediate": "Developing a web scraper that cleans data or a Discord bot.",
+        "Pro": "Optimizing financial algorithms or architecting high-traffic microservices."
+    }
+    app = apps.get(level, "Building robust, scalable Python applications.")
+
+    # --- Final Construction ---
+    markdown = f"""
+# {title}
+
+{intro}
+
+## Why This Matters
+{matter}
+
+## Concept Explanation
+{explanation}
+
+## Mental Model
+{model}
+
+## Code Example
+```python
+{code}
+```
+
+## Real-World Application
+{app}
+
+## Common Mistakes
+- { "Forgetting to update the variable value" if level == "Beginner" else "Using global variables unnecessarily" if level == "Intermediate" else "Ignoring memory overhead in large data structures" }
+- { "Using incorrect naming conventions" if level == "Beginner" else "Not handling edge cases in input" if level == "Intermediate" else "Ignoring the Global Interpreter Lock (GIL) limitations" }
+
+## Best Practices
+- Use descriptive, **snake_case** names.
+- Keep functions small and focused.
+- { "Add helpful comments" if level == "Beginner" else "Follow PEP 8 guidelines" if level == "Intermediate" else "Write unit tests for core logic" }
+
+## Mini Challenge
+Head over to the **Challenge** tab to apply these concepts in our interactive code editor!
+
+## Knowledge Check
+1. How does Python handle the data type of a variable?
+2. What happens to the memory when a variable is reassigned?
+
+## Pro Tip
+{ "Python is readable like English - keep it simple!" if level == "Beginner" else "Use `help()` to explore any object's methods." if level == "Intermediate" else "Use `__slots__` to save memory in classes with many instances." }
+"""
+    return markdown.strip()
+
 
 
 def _question_bank(spec: LessonSpec) -> list[dict]:
@@ -358,162 +414,162 @@ def _question_bank(spec: LessonSpec) -> list[dict]:
     return [q1, q2]
 
 
-def _challenge_spec(spec: LessonSpec) -> dict:
-    # Generate realistic beginner-level tasks by topic
-    mapping = {
+def _lesson_markdown_structured(spec: LessonSpec) -> str:
+    title = spec.title.replace(f" ({spec.difficulty})", "")
+    level = spec.difficulty
+    topic = spec.topic
+
+    # Explanations tailored by difficulty
+    explanations = {
+        "variables": {
+            "Beginner": "In Python, a variable is a name that refers to a value stored in memory. You do not need to declare its type; Python infers it dynamically at runtime.",
+            "Intermediate": "Variables in Python are symbolic references to objects. Reassigning a variable changes the reference, not the object. Multiple names can point to the same memory object.",
+            "Pro": "Python variables act as entries in a namespace dictionary pointing to memory addresses. CPython manages memory via reference counting and a cyclic garbage collector."
+        },
         "input_output": {
-            "title": "Print Hello World",
-            "description": "Write a program that prints Hello World",
-            "starter": "\n".join([
-                "def solve():",
-                "    # print Hello World",
-                "    print('Hello World')",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "", "expected": "Hello World"}],
+            "Beginner": "Input and output (I/O) allow programs to communicate with users. The `input()` function captures text from the user, and `print()` displays text on the screen.",
+            "Intermediate": "Python manages I/O via standard streams (`sys.stdin` and `sys.stdout`). The `input()` function blocks execution until data is received, always returning a string.",
+            "Pro": "Beneath the standard functions, professional I/O handles buffered streams. High-load applications often utilize direct stream writes or the logging module to avoid context-switching overhead."
+        }
+    }
+    
+    codes = {
+        "variables": {
+            "Beginner": "score = 0\nscore = score + 10\nprint(score) # Outputs 10",
+            "Intermediate": "a, b = 5, 10\na, b = b, a # Swap values\nprint(f'a={a}, b={b}')",
+            "Pro": "import sys\nx = [1, 2, 3]\ny = x\nprint(id(x) == id(y)) # True\nprint(sys.getrefcount(x))"
+        },
+        "input_output": {
+            "Beginner": "name = input('Name: ')\nprint('Hello', name)",
+            "Intermediate": "import sys\nsys.stdout.write('Processing...\\n')\nval = sys.stdin.readline().strip()",
+            "Pro": "import io\nbuffer = io.StringIO()\nbuffer.write('Buffered output')\nprint(buffer.getvalue())"
+        }
+    }
+
+    challenges = {
+        "Beginner": "Implement the core syntax correctly and verify the output exactly. Focus on getting the basic flow correctly.",
+        "Intermediate": "Apply the concept in a realistic workflow. Focus on correct typing, structured patterns, and clean code.",
+        "Pro": "Solve the problem with correctness while balancing runtime performance and architectural constraints.",
+    }
+
+    # Fallback to generic robust content if topic specific doesn't exist
+    topic_explanation = explanations.get(topic, {}).get(level)
+    if not topic_explanation:
+        if level == "Beginner":
+            topic_explanation = f"Learning {title} introduces you to fundamental Python syntax and basic programmatic behavior. It is important to focus on clarity and predictability."
+        elif level == "Intermediate":
+            topic_explanation = f"For {title}, we apply standardized patterns and handle common workflows. This ensures code behaves robustly under normal operating conditions."
+        else:
+            topic_explanation = f"At the architectural level, {title} demands an understanding of internal memory representations and execution boundaries to maximize performance."
+
+    topic_code = codes.get(topic, {}).get(level, f"# Provide your {level.lower()} implementation for {title}\nprint('Executing {title} logic')")
+
+    return f"""# {title}
+
+## Definition
+{title} is a core Python concept and programming mechanism used to express application behavior reliably and securely.
+
+## Why it matters
+This mechanism is foundational in application codebases, optimization paths, and scripting operations. Correct implementation guarantees predictable state execution.
+
+## Concept Explanation
+{topic_explanation}
+
+## Mental Model
+Visualize {title} as a deterministic transformation pipeline. Input state goes in, operations are applied, and predictable output is returned.
+
+## Code Example
+```python
+{topic_code}
+```
+
+## Real-world use
+Engineers use this concept extensively while structuring backend APIs, cleaning arbitrary user data, and enforcing application state consistency.
+
+## Common mistakes
+- Misunderstanding the underlying behavior resulting in side effects.
+- Skipping edge-case validation for undefined states.
+
+## Best practices
+- Write expressive, self-documenting syntax.
+- Contain state mutations and utilize strict scoping whenever possible.
+
+## Knowledge check
+1. How does Python enforce predictability when using {title}?
+2. What edge cases must be accommodated during the implementation of {title}?
+
+## Challenge section
+{challenges.get(level, challenges["Beginner"])}
+"""
+
+
+def _challenge_spec(spec: LessonSpec) -> dict:
+    """
+    Generates difficulty-appropriate challenge specifications for each lesson.
+    """
+    topic = spec.topic
+    level = spec.difficulty
+    
+    # Base challenge logic
+    challenges = {
+        "input_output": {
+            "Beginner": {
+                "title": "Basic Greeter",
+                "desc": "Write a program that takes a name as input and prints 'Hello, <name>!'.",
+                "starter": "name = input()\nprint(f'Hello, {name}!')",
+                "tests": [{"input": "Alice", "expected": "Hello, Alice!"}]
+            },
+            "Intermediate": {
+                "title": "Formatted Calculator",
+                "desc": "Take two numbers as input and print their sum in the format: 'The sum of X and Y is Z'.",
+                "starter": "a = int(input())\nb = int(input())\nprint(f'The sum of {a} and {b} is {a + b}')",
+                "tests": [{"input": "5\n10", "expected": "The sum of 5 and 10 is 15"}]
+            },
+            "Pro": {
+                "title": "Stream Processor",
+                "desc": "Read multiple lines of input until 'END' is typed. Print the count of lines received.",
+                "starter": "count = 0\nwhile True:\n    line = input()\n    if line == 'END': break\n    count += 1\nprint(count)",
+                "tests": [{"input": "line1\nline2\nEND", "expected": "2"}]
+            }
         },
         "variables": {
-            "title": "Input Name and Greet",
-            "description": "Read a name and print 'Hello <name>'",
-            "starter": "\n".join([
-                "def solve():",
-                "    name = input().strip()",
-                "    print('Hello ' + name)",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "Alice", "expected": "Hello Alice"}, {"input": "Bob", "expected": "Hello Bob"}],
-        },
-        "if_else": {
-            "title": "Even or Odd Checker",
-            "description": "Read an integer and print 'Even' or 'Odd'",
-            "starter": "\n".join([
-                "def solve():",
-                "    n = int(input().strip())",
-                "    print('Even' if n % 2 == 0 else 'Odd')",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "2", "expected": "Even"}, {"input": "7", "expected": "Odd"}],
-        },
-        "loops_for": {
-            "title": "Sum of N Numbers",
-            "description": "Read N and then N integers; print their sum",
-            "starter": "\n".join([
-                "def solve():",
-                "    n = int(input().strip())",
-                "    total = 0",
-                "    for _ in range(n):",
-                "        total += int(input().strip())",
-                "    print(total)",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "3\n1\n2\n3\n", "expected": "6"}, {"input": "4\n5\n5\n5\n5\n", "expected": "20"}],
-        },
-        "functions_def": {
-            "title": "Factorial Function",
-            "description": "Read n and print n! using a function",
-            "starter": "\n".join([
-                "def fact(n):",
-                "    res = 1",
-                "    for i in range(2, n+1):",
-                "        res *= i",
-                "    return res",
-                "",
-                "def solve():",
-                "    n = int(input().strip())",
-                "    print(fact(n))",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "4", "expected": "24"}, {"input": "0", "expected": "1"}],
-        },
-        "lists": {
-            "title": "Reverse String",
-            "description": "Read a string and print it reversed",
-            "starter": "\n".join([
-                "def solve():",
-                "    s = input().strip()",
-                "    print(s[::-1])",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "abc", "expected": "cba"}, {"input": "Python", "expected": "nohtyP"}],
-        },
-        "dicts": {
-            "title": "Dictionary Lookup",
-            "description": "Read key:value pairs count k, then k pairs; then read a key and print its value or 'Not found'",
-            "starter": "\n".join([
-                "def solve():",
-                "    n = int(input().strip())",
-                "    d = {}",
-                "    for _ in range(n):",
-                "        line = input().strip()",
-                "        key, val = line.split(':', 1)",
-                "        d[key.strip()] = val.strip()",
-                "    q = input().strip()",
-                "    print(d.get(q, 'Not found'))",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "2\nname: Alice\nage: 21\nname\n", "expected": "Alice"}, {"input": "1\nx: 10\ny\n", "expected": "Not found"}],
-        },
-        "classes": {
-            "title": "Class with Constructor",
-            "description": "Define a class Person with name, read a name, create Person, print name",
-            "starter": "\n".join([
-                "class Person:",
-                "    def __init__(self, name):",
-                "        self.name = name",
-                "",
-                "def solve():",
-                "    n = input().strip()",
-                "    p = Person(n)",
-                "    print(p.name)",
-                "",
-                "if __name__ == '__main__':",
-                "    solve()",
-                ""
-            ]),
-            "tests": [{"input": "Alice", "expected": "Alice"}],
-        },
+            "Beginner": {
+                "title": "Variable Swap",
+                "desc": "You are given two variables a and b. Swap their values and print them.",
+                "starter": "a = input()\nb = input()\na, b = b, a\nprint(a)\nprint(b)",
+                "tests": [{"input": "5\n10", "expected": "10\n5"}]
+            },
+            "Intermediate": {
+                "title": "Type Inspector",
+                "desc": "Read an input. If it can be an integer, print 'INT', else if it can be a float, print 'FLOAT', else 'STR'.",
+                "starter": "val = input()\ntry:\n    int(val)\n    print('INT')\nexcept:\n    try:\n        float(val)\n        print('FLOAT')\n    except:\n        print('STR')",
+                "tests": [{"input": "10", "expected": "INT"}, {"input": "10.5", "expected": "FLOAT"}, {"input": "hi", "expected": "STR"}]
+            },
+            "Pro": {
+                "title": "Reference Counter Simulation",
+                "desc": "Simulate a simple reference count. If an object is assigned to a new variable, count increases. If a variable is deleted, count decreases. Read 'ADD' or 'DEL' and print the final count starting from 1.",
+                "starter": "count = 1\nn = int(input())\nfor _ in range(n):\n    op = input()\n    if op == 'ADD': count += 1\n    elif op == 'DEL': count -= 1\nprint(count)",
+                "tests": [{"input": "3\nADD\nADD\nDEL", "expected": "2"}]
+            }
+        }
     }
-    entry = mapping.get(spec.topic) or {
-        "title": f"{spec.title} Practice",
-        "description": "Write a small program that prints a simple result.",
-        "starter": "\n".join([
-            "def solve():",
-            "    print('OK')",
-            "",
-            "if __name__ == '__main__':",
-            "    solve()",
-            ""
-        ]),
-        "tests": [{"input": "", "expected": "OK"}],
+
+    # Default fallback challenge if topic/level not found
+    default_challenge = {
+        "title": f"{spec.title} Challenge",
+        "desc": f"Apply what you learned about {spec.title} to solve this problem. Ensure your output matches the expected format exactly.",
+        "starter": "print('Solution complete!')",
+        "tests": [{"input": "", "expected": "Solution complete!"}]
     }
+
+    res = challenges.get(topic, {}).get(level, default_challenge)
     return {
-        "title": entry["title"],
-        "description": entry["description"],
-        "initial_code": "",  # Empty by default to encourage active learning
-        "solution_code": entry["starter"], # Store the original starter as solution
-        "test_cases": entry["tests"],
-        "points": 20,
+        "title": res["title"],
+        "description": res["desc"],
+        "initial_code": "", 
+        "solution_code": res["starter"],
+        "test_cases": res["tests"],
+        "points": 50 if level == "Pro" else (30 if level == "Intermediate" else 10),
     }
 
 
@@ -597,7 +653,14 @@ def _build_specs() -> list[LessonSpec]:
     specs: list[LessonSpec] = []
     for module_order, lessons in module_topics.items():
         for idx, (title, topic) in enumerate(lessons, start=1):
-            specs.append(LessonSpec(module_order=module_order, lesson_order=idx, title=title, topic=topic))
+            for diff in ["Beginner", "Intermediate", "Pro"]:
+                specs.append(LessonSpec(
+                    module_order=module_order, 
+                    lesson_order=idx, 
+                    title=f"{title} ({diff})", 
+                    topic=topic, 
+                    difficulty=diff
+                ))
     return specs
 
 
@@ -644,7 +707,7 @@ class Command(BaseCommand):
                 from django.db import connection
                 if connection.vendor == 'sqlite':
                     with connection.cursor() as cursor:
-                        tables = ['core_module', 'core_lesson', 'core_quiz', 'core_question', 'core_challenge', 'core_lessonprofile']
+                        tables = ['modules', 'lessons', 'quizzes', 'questions', 'challenges', 'lessons_lessonprofile']
                         for table in tables:
                             try:
                                 cursor.execute(f"DELETE FROM sqlite_sequence WHERE name='{table}'")
@@ -656,7 +719,7 @@ class Command(BaseCommand):
                         cursor.execute("SELECT relname FROM pg_class WHERE relkind = 'S'")
                         sequences = [row[0] for row in cursor.fetchall()]
                         
-                        tables = ['core_module', 'core_lesson', 'core_quiz', 'core_question', 'core_challenge', 'core_lessonprofile']
+                        tables = ['modules', 'lessons', 'quizzes', 'questions', 'challenges', 'lessons_lessonprofile']
                         for table in tables:
                             seq_name = f"{table}_id_seq"
                             if seq_name in sequences:
@@ -668,10 +731,10 @@ class Command(BaseCommand):
             # Modules
             module_by_order: dict[int, Module] = {}
             created_modules = 0
-            for order, title, description in MODULES:
+            for mod_id, order, title, description in MODULES:
                 module, created = Module.objects.get_or_create(
-                    order=order,
-                    defaults={"title": title, "description": description, "image_url": None},
+                    id=mod_id,
+                    defaults={"order": order, "title": title, "description": description, "image_url": None},
                 )
                 if not created:
                     updates = {}
@@ -679,6 +742,8 @@ class Command(BaseCommand):
                         updates["title"] = title
                     if module.description != description:
                         updates["description"] = description
+                    if module.order != order:
+                        updates["order"] = order
                     if updates:
                         for k, v in updates.items():
                             setattr(module, k, v)
@@ -687,7 +752,7 @@ class Command(BaseCommand):
                     created_modules += 1
                 module_by_order[order] = module
 
-            # Certificates (templates) – ensure 5 exist (module completion certs)
+            # Certificates (templates) - ensure 5 exist (module completion certs)
             cert_templates = [
                 ("cert-fundamentals", "Python Fundamentals Certificate", "Awarded after completing Python Fundamentals."),
                 ("cert-control-flow", "Control Flow Certificate", "Awarded after completing Control Flow."),
@@ -739,10 +804,12 @@ class Command(BaseCommand):
             ]
 
             for c_data in standalone_challenges:
-                Challenge.objects.get_or_create(
-                    lesson_id=-1, # Standalone
-                    title=c_data["title"],
+                c_id = f"standalone-{slugify(c_data['title'])}"
+                Challenge.objects.update_or_create(
+                    id=c_id,
                     defaults={
+                        "lesson_id": "-1", # Standalone
+                        "title": c_data["title"],
                         "description": c_data["desc"],
                         "initial_code": "",
                         "solution_code": c_data["sol"],
@@ -753,7 +820,7 @@ class Command(BaseCommand):
                 )
                 created_challenges += 1
 
-            # Badges – create 10 (in gamification + core for admin visibility)
+            # Badges - create 10 (in gamification + core for admin visibility)
             badges = [
                 ("first-lesson", "First Lesson", "Complete your first lesson."),
                 ("diagnostic-done", "Placement Completed", "Finish the placement diagnostic quiz."),
@@ -779,16 +846,17 @@ class Command(BaseCommand):
             # Index existing for quick lookup
             for spec in lesson_specs:
                 module = module_by_order[spec.module_order]
-                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}")
-                lesson, created = Lesson.objects.get_or_create(
-                    module_id=module.id,
-                    slug=slug,
-                    difficulty=spec.difficulty,
+                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}-{spec.difficulty}")
+                lesson, created = Lesson.objects.update_or_create(
+                    id=slug,
                     defaults={
+                        "module_id": module.id,
                         "title": spec.title,
-                        "content": _lesson_markdown(spec),
+                        "slug": slug,
+                        "content": _lesson_markdown_structured(spec),
                         "order": spec.lesson_order,
                         "duration": spec.duration,
+                        "difficulty": spec.difficulty,
                     },
                 )
                 if not created:
@@ -819,7 +887,10 @@ class Command(BaseCommand):
 
                 # Quiz (1 per lesson)
                 quiz_title = f"{spec.title} Quiz"
-                quiz, q_created = Quiz.objects.get_or_create(lesson_id=lesson.id, defaults={"title": quiz_title})
+                quiz, q_created = Quiz.objects.update_or_create(
+                    id=f"quiz-{lesson.id}",
+                    defaults={"lesson_id": lesson.id, "title": quiz_title}
+                )
                 if q_created:
                     created_quizzes += 1
                 else:
@@ -832,8 +903,9 @@ class Command(BaseCommand):
                 existing_count = Question.objects.filter(quiz_id=quiz.id).count()
                 if existing_count != len(desired):
                     Question.objects.filter(quiz_id=quiz.id).delete()
-                    for q in desired:
+                    for q_idx, q in enumerate(desired):
                         Question.objects.create(
+                            id=f"q-{quiz.id}-{q_idx}",
                             quiz_id=quiz.id,
                             text=q["text"],
                             type="mcq",
@@ -845,8 +917,7 @@ class Command(BaseCommand):
                 # LessonProfile: topic + prereqs (previous lesson in module)
                 prereq_ids = []
                 if spec.lesson_order > 1:
-                    prev_slug = slugify(f"m{spec.module_order}-{spec.lesson_order-1}-{lesson_specs[(spec.module_order-1)*10 + (spec.lesson_order-2)].title}")
-                    prev = Lesson.objects.filter(module_id=module.id, slug=prev_slug, difficulty=spec.difficulty).only("id").first()
+                    prev = Lesson.objects.filter(module_id=module.id, order=spec.lesson_order-1, difficulty=spec.difficulty).only("id").first()
                     if prev:
                         prereq_ids = [prev.id]
 
@@ -861,20 +932,24 @@ class Command(BaseCommand):
                 )
                 upserted_profiles += 1
 
-            # Challenges – ~30 challenges attached to the first 30 lessons
+            # Challenges - Link EVERY lesson to a difficulty-appropriate challenge
             created_challenges = 0
-            first_30 = lesson_specs[:30]
-            for spec in first_30:
+            for spec in lesson_specs:
                 module = module_by_order[spec.module_order]
-                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}")
-                lesson = Lesson.objects.filter(module_id=module.id, slug=slug, difficulty=spec.difficulty).first()
+                slug = slugify(f"m{spec.module_order}-{spec.lesson_order}-{spec.title}-{spec.difficulty}")
+                lesson = Lesson.objects.filter(id=slug).first()
                 if not lesson:
                     continue
+                
                 ch = _challenge_spec(spec)
-                _, ch_created = Challenge.objects.get_or_create(
-                    lesson_id=lesson.id,
-                    title=ch["title"],
+                # Ensure the challenge ID is unique and linked to this specific lesson variant
+                challenge_id = f"ch-{lesson.id}"
+                
+                Challenge.objects.update_or_create(
+                    id=challenge_id,
                     defaults={
+                        "lesson_id": lesson.id,
+                        "title": ch["title"],
                         "description": ch["description"],
                         "initial_code": ch["initial_code"],
                         "solution_code": ch["solution_code"],
@@ -883,20 +958,19 @@ class Command(BaseCommand):
                         "difficulty": spec.difficulty,
                     },
                 )
-                if ch_created:
-                    created_challenges += 1
+                created_challenges += 1
 
             # Badges
             created_badges = 0
             badges_data = [
-                ("first-steps", "First Steps – Complete first lesson"),
-                ("quiz-master", "Quiz Master – Score 80%+ in placement quiz"),
-                ("consistency-starter", "Consistency Starter – 3 day streak"),
-                ("code-warrior", "Code Warrior – Complete 10 lessons"),
-                ("python-apprentice", "Python Apprentice – Complete Module 1"),
-                ("python-expert", "Python Expert – Complete all modules"),
-                ("perfect-score", "Perfect Score – 100% on any quiz"),
-                ("fast-learner", "Fast Learner – Finish module in under 3 days"),
+                ("first-steps", "First Steps - Complete first lesson"),
+                ("quiz-master", "Quiz Master - Score 80%+ in placement quiz"),
+                ("consistency-starter", "Consistency Starter - 3 day streak"),
+                ("code-warrior", "Code Warrior - Complete 10 lessons"),
+                ("python-apprentice", "Python Apprentice - Complete Module 1"),
+                ("python-expert", "Python Expert - Complete all modules"),
+                ("perfect-score", "Perfect Score - 100% on any quiz"),
+                ("fast-learner", "Fast Learner - Finish module in under 3 days"),
             ]
             for code, title in badges_data:
                 obj, was_created = GamificationBadge.objects.get_or_create(
@@ -932,3 +1006,4 @@ class Command(BaseCommand):
                 f"at {timezone.now().isoformat(timespec='seconds')}"
             )
         )
+

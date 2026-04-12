@@ -22,6 +22,7 @@ import ModuleQuiz from "@/pages/ModuleQuiz";
 import Certificate from "@/pages/Certificate";
 import Analytics from "@/pages/Analytics";
 import Challenges from "@/pages/Challenges";
+import VerifyCertificate from "@/pages/VerifyCertificate";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -131,6 +132,9 @@ function Router() {
       <Route path="/challenges">
         <ProtectedRoute component={Challenges} />
       </Route>
+
+      {/* Public Verification Route */}
+      <Route path="/verify/:code" component={VerifyCertificate} />
 
       <Route component={NotFound} />
     </Switch>

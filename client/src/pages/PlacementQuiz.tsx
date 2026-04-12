@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useModules } from "@/hooks/use-modules";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiUrl, getAccessToken } from "@/lib/api";
 import { Link, useLocation } from "wouter";
@@ -69,6 +69,10 @@ export default function PlacementQuiz() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const lastViolationTsRef = useMemo(() => ({ ts: 0 }), []);
+  const isSubmittingRef = useRef(false);
+  const hasSubmittedRef = useRef(false);
+  const [hasStartedAnswering, setHasStartedAnswering] = useState(false);
+  const phaseRef = useRef<"intro" | "active" | "resume">("intro");
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -95,7 +99,14 @@ export default function PlacementQuiz() {
     bootstrap();
   }, [diagnostic]);
 
+  // Keep phaseRef in sync so timer effect can read current phase without re-registering
   useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  // Only tick the clock when the quiz is active
+  useEffect(() => {
+    if (phase !== "active") return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -106,7 +117,7 @@ export default function PlacementQuiz() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [phase]);
 
   useEffect(() => {
     const registerViolation = () => {
@@ -126,21 +137,28 @@ export default function PlacementQuiz() {
       });
     };
     const onVisibility = () => {
-      if (document.hidden) {
-        registerViolation();
-      }
+      // Small delay to prevent accidental triggers from background popups/notifications
+      setTimeout(() => {
+        if (document.hidden) {
+          registerViolation();
+        }
+      }, 300);
     };
     const onBlur = () => {
-      registerViolation();
+       // Only register blur if tab isn't already hidden (to avoid double counting)
+       if (!document.hidden) {
+         registerViolation();
+       }
     };
     const onContext = (e: Event) => {
-      e.preventDefault();
+      // Allow right-click but maybe warn? Many people use it for translation etc.
+      // e.preventDefault(); 
     };
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl && (key === "c" || key === "v")) {
-        e.preventDefault();
+        // e.preventDefault(); // Might be too restrictive for some setups
       }
       if (key === "f12" || (ctrl && key === "shift")) {
         e.preventDefault();
@@ -159,30 +177,49 @@ export default function PlacementQuiz() {
   }, []);
 
   useEffect(() => {
-    if (violationCount >= 3 && !expired) {
+    const VIOLATION_LIMIT = 5;
+    // Never auto-submit if user hasn't started answering — prevents blank quiz from firing
+    if (!hasStartedAnswering) return;
+    if (violationCount >= VIOLATION_LIMIT && !expired) {
       setExpired(true);
-      if (attemptId) {
+      if (attemptId && !hasSubmittedRef.current) {
         handleSubmit(true);
       }
     } else if (expired) {
-      if (attemptId) {
+      if (attemptId && !hasSubmittedRef.current && !isSubmittingRef.current) {
         handleSubmit(true);
       }
     }
-  }, [violationCount, expired, attemptId]);
+  }, [violationCount, expired, attemptId, hasStartedAnswering]);
 
   // No onboarding modal; banner handled on Dashboard
 
   const placementCompleted = hasTakenQuiz;
   const quiz = diagnostic?.quiz;
-  const questions = diagnostic?.questions || [];
+  const rawQuestions = diagnostic?.questions || [];
+
+  // Shuffle options once per session on the frontend (stable within session, but randomized per attempt)
+  const questions = useMemo(() => {
+    return rawQuestions.map((q: any) => {
+      const opts = Array.isArray(q.options) ? [...q.options] : [];
+      // Fisher-Yates shuffle
+      for (let i = opts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [opts[i], opts[j]] = [opts[j], opts[i]];
+      }
+      return { ...q, options: opts };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawQuestions.length]); // Only re-shuffle when question list changes (new attempt)
 
   const handleSelect = (questionId: string, optionIndex: number) => {
     if (expired) return;
+    setHasStartedAnswering(true);
     setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
   };
 
   const handleSubmit = async (auto?: boolean) => {
+    if (hasSubmittedRef.current || isSubmittingRef.current) return;
     setError(null);
     if (!quiz || questions.length === 0) {
       setError("No placement quiz is available right now.");
@@ -203,6 +240,7 @@ export default function PlacementQuiz() {
     }
 
     try {
+      isSubmittingRef.current = true;
       setSubmitting(true);
       const accessToken = getAccessToken();
       if (!accessToken) {
@@ -222,7 +260,7 @@ export default function PlacementQuiz() {
             return {
               questionId: q.id,
               selectedIndex: answers[q.id] !== undefined ? answers[q.id] : -1,
-              isCorrect: selectedOpt?.is_correct || selectedOpt?.correct || false,
+              selectedOptionId: selectedOpt?.id ?? null,
             };
           }),
           violationCount,
@@ -247,9 +285,11 @@ export default function PlacementQuiz() {
       await queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
       
       if (violationCount >= 3) {
+        hasSubmittedRef.current = true;
         setViolationDialog(true);
         setExpired(true);
       } else {
+        hasSubmittedRef.current = true;
         toast({
           title: data?.timeUp ? "Time is up. Your quiz has been submitted." : "Placement quiz completed",
           description: `Score: ${Math.round((data?.weightedScore || data?.overallScore || 0) * 100)}%`,
@@ -278,6 +318,7 @@ export default function PlacementQuiz() {
     } catch (err: any) {
       setError(err.message || "Failed to submit diagnostic quiz");
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -471,8 +512,11 @@ export default function PlacementQuiz() {
                 You need to complete the placement quiz to personalize your learning path.
               </div>
             )}
-            <div className="text-xs text-muted-foreground mt-2">
-              Time left: {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+              <span>Time left: {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}</span>
+              <span className={cn(violationCount > 0 ? "text-orange-500 font-medium" : "")}>
+                Violations: {violationCount} / 5
+              </span>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">

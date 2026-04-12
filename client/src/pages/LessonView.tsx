@@ -121,10 +121,10 @@ export default function LessonView() {
   const placementCompleted = Boolean(user?.has_taken_quiz || user?.diagnostic_completed);
   const allLessons = useMemo(() => {
     if (!modules) return [];
-    const fallback = user?.level || "Beginner";
     return (modules as any[])
       .flatMap((m: any) => {
-        const targetLevel = moduleLevels[m.id] || fallback;
+        // Strictly use placement-assigned level for each module; default to Beginner
+        const targetLevel = moduleLevels[m.id] || "Beginner";
         const filtered = (m.lessons || []).filter((l: any) => normalizeLevel(l.difficulty || "Beginner") === normalizeLevel(targetLevel));
         const lessons = filtered.length > 0 ? filtered : (m.lessons || []);
         return lessons.map((l: any) => ({ ...l, moduleOrder: m.order }));
@@ -133,7 +133,7 @@ export default function LessonView() {
         if (a.moduleOrder !== b.moduleOrder) return a.moduleOrder - b.moduleOrder;
         return (a.order || 0) - (b.order || 0);
       });
-  }, [modules, moduleLevels, user?.level]);
+  }, [modules, moduleLevels]);
   const firstLessonId = allLessons[0]?.id || "";
 
   const currentLessonIndex = allLessons.findIndex(l => l.id === lessonId);
@@ -147,8 +147,8 @@ export default function LessonView() {
   const isModuleCompleted = (moduleId: string) => {
     const module = (modules as any[])?.find(m => m.id === moduleId);
     if (!module || !module.lessons || module.lessons.length === 0) return false;
-    const fallback = user?.level || "Beginner";
-    const targetLevel = moduleLevels[moduleId] || fallback;
+    // Strictly use placement-assigned level; default to Beginner
+    const targetLevel = moduleLevels[moduleId] || "Beginner";
     const filtered = (module.lessons as any[]).filter((l: any) => normalizeLevel(l.difficulty || "Beginner") === normalizeLevel(targetLevel));
     const lessons = filtered.length > 0 ? filtered : (module.lessons as any[]);
     return lessons.every(l => isLessonCompleted(l.id));
@@ -251,22 +251,26 @@ export default function LessonView() {
             spread: 70,
             origin: { y: 0.6 }
           });
+          
+          // Determine the message based on current progress
+          const currentProgress = progress?.find(p => p.lessonId === lessonId);
+          const quizDone = currentProgress?.quizCompleted;
+          
           toast({
-            title: "Challenge Passed! ✅",
-            description: "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
+            title: "Coding Challenge Completed! ✅",
+            description: quizDone 
+              ? "Challenge passed! Next lesson unlocked ✅" 
+              : "Coding challenge completed successfully!",
             className: "bg-green-500 text-white border-none",
           });
+          
           setMasteryImpact(0.06);
           setIsCompleted(true);
           
           if (user) {
-            // Refetch all relevant data to reflect the challenge completion
-            await Promise.all([
-              queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/lessons"] }),
-              refetch()
-            ]);
+            // Refetch faster by only invalidating what's needed
+            queryClient.invalidateQueries({ queryKey: ["/api/user-progress"] });
+            refetch();
           }
         } else {
           setError(result.error || "Code ran but didn't pass all test cases. Check your output above.");
@@ -328,9 +332,15 @@ export default function LessonView() {
           spread: 70,
           origin: { y: 0.6 },
         });
+
+        const currentProgress = progress?.find(p => p.lessonId === lessonId);
+        const quizDone = currentProgress?.quizCompleted;
+
         toast({
-          title: "Challenge Passed! ✅",
-          description: "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
+          title: "Coding Challenge Completed! ✅",
+          description: quizDone 
+            ? "Challenge passed! Next lesson unlocked ✅" 
+            : "Coding challenge completed successfully!",
           className: "bg-green-500 text-white border-none",
         });
         setMasteryImpact(0.06);
@@ -348,12 +358,8 @@ export default function LessonView() {
               completedAt: new Date().toISOString(),
             });
             
-            // Refetch all relevant data to reflect the challenge completion
-            await Promise.all([
-              queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/lessons"] })
-            ]);
+            queryClient.invalidateQueries({ queryKey: ["/api/user-progress"] });
+            refetch();
           } catch (err) {
             console.error("Error updating progress after challenge:", err);
           }
@@ -406,16 +412,27 @@ export default function LessonView() {
         </button>
       );
     } else if (lessonErrorStatus === 403) {
-      title = "Placement quiz required";
-      description = "Complete the placement test to unlock this lesson.";
-      action = (
-        <button
-          onClick={() => (window.location.href = "/placement-quiz")}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-        >
-          Take the placement quiz
-        </button>
-      );
+      title = "Lesson Locked";
+      description = lessonErrorMessage || "Complete the required lessons to unlock this one.";
+      if (description.toLowerCase().includes("placement")) {
+          action = (
+            <button
+              onClick={() => (window.location.href = "/placement-quiz")}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Take the placement quiz
+            </button>
+          );
+      } else {
+          action = (
+            <button
+              onClick={() => (window.location.href = "/curriculum")}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Back to Curriculum
+            </button>
+          );
+      }
     } else if (lessonErrorStatus === 404) {
       title = "Lesson not found";
       description = "This lesson may have been removed or does not exist.";
@@ -427,7 +444,6 @@ export default function LessonView() {
           <div className="max-w-lg w-full bg-card border border-border rounded-2xl p-8 text-center space-y-4">
             <h1 className="text-2xl font-bold">{title}</h1>
             <p className="text-muted-foreground">{description}</p>
-            <p className="text-xs text-muted-foreground">{lessonErrorMessage}</p>
             {action}
           </div>
         </div>
@@ -496,8 +512,7 @@ export default function LessonView() {
                </Link>
              )}
              {nextLessonId && (
-               <Link href={`/lesson/${nextLessonId}`}>
-                 <Button 
+                 <Button
                   size="lg"
                   className="rounded-full px-8 h-14 text-lg font-semibold gap-2 shadow-lg shadow-primary/20"
                   onClick={() => {
@@ -535,7 +550,6 @@ export default function LessonView() {
                   Next Lesson
                   <ArrowRight className="w-5 h-5" />
                 </Button>
-               </Link>
              )}
            </div>
            {/* Progress Indicator */}
@@ -609,17 +623,18 @@ export default function LessonView() {
                         lastCode: JSON.stringify(answers)
                       });
                       
-                      // Refetch all relevant data to see if overall completion is now True
-                      await Promise.all([
-                        queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
-                        queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
-                        queryClient.refetchQueries({ queryKey: ["/api/lessons"] }),
-                        refetch()
-                      ]);
+                      // Refetch and show message
+                      queryClient.invalidateQueries({ queryKey: ["/api/user-progress"] });
+                      await refetch();
                       
-                      const motivationalMessage = score >= 80 
-                        ? "Great job! Now complete the Coding Challenge to unlock the next lesson."
-                        : "Keep learning! Complete the Coding Challenge to unlock the next lesson.";
+                      // Get updated progress to check if challenge is also done
+                      const updatedProgress = queryClient.getQueryData<any[]>(["/api/user-progress"])
+                        ?.find(p => p.lessonId === lessonId);
+                      const challengeDone = updatedProgress?.challengeCompleted;
+
+                      const motivationalMessage = challengeDone
+                        ? "Choice well made! Next lesson unlocked ✅"
+                        : "Knowledge check completed successfully!";
                       
                       toast({
                         title: "Knowledge Check Completed! ✅",

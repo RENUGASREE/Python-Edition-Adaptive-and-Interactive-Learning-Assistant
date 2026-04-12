@@ -15,47 +15,85 @@ def _categorize(acc: float) -> str:
     return "STRONG"
 
 
+from django.db.models import Count, Q, Avg
+from django.db import transaction
+
 @transaction.atomic
 def analyze_user_skill_gaps(user: User) -> Tuple[Dict[str, float], Dict[str, str]]:
-    rows = AssessmentInteraction.objects.filter(user=user)
-    totals: Dict[str, int] = {}
-    corrects: Dict[str, int] = {}
-    for r in rows:
-        topic = (r.topic or "").strip()
-        if not topic:
-            continue
-        totals[topic] = totals.get(topic, 0) + 1
-        if r.correctness:
-            corrects[topic] = corrects.get(topic, 0) + 1
+    # 1. Use database aggregation instead of fetching all rows and iterating in Python
+    stats = AssessmentInteraction.objects.filter(user=user).values('topic').annotate(
+        total=Count('id'),
+        correct_count=Count('id', filter=Q(correctness=True))
+    )
+
+    if not stats:
+        return {}, {}
+
     accuracy_map: Dict[str, float] = {}
     status_map: Dict[str, str] = {}
-    for topic, total in totals.items():
-        acc = (corrects.get(topic, 0) / total) if total else 0.0
+    
+    now = timezone.now()
+    
+    # 2. Optimized Bulk Update/Create
+    existing_analyses = {a.topic: a for a in SkillGapAnalysis.objects.filter(user=user)}
+    to_create = []
+    to_update = []
+
+    for s in stats:
+        topic = (s['topic'] or "").strip()
+        if not topic: continue
+        
+        acc = s['correct_count'] / s['total'] if s['total'] else 0.0
         accuracy_map[topic] = acc
-        status_map[topic] = _categorize(acc)
-        obj, _ = SkillGapAnalysis.objects.update_or_create(
-            user=user,
-            topic=topic,
-            defaults={
-                "accuracy": round(acc * 100, 2),
-                "status": status_map[topic],
-                "last_updated": timezone.now(),
-            },
-        )
-    _generate_learning_plan(user, accuracy_map, status_map)
+        status = _categorize(acc)
+        status_map[topic] = status
+        
+        if topic in existing_analyses:
+            analysis = existing_analyses[topic]
+            analysis.accuracy = round(acc * 100, 2)
+            analysis.status = status
+            analysis.last_updated = now
+            to_update.append(analysis)
+        else:
+            to_create.append(SkillGapAnalysis(
+                user=user,
+                topic=topic,
+                accuracy=round(acc * 100, 2),
+                status=status,
+                last_updated=now
+            ))
+
+    if to_create:
+        SkillGapAnalysis.objects.bulk_create(to_create)
+    if to_update:
+        SkillGapAnalysis.objects.bulk_update(to_update, ['accuracy', 'status', 'last_updated'])
+    
+    # 3. Learning plan generation with cooldown
+    last_plan = LearningPlan.objects.filter(user=user).order_by('id').last()
+    if not last_plan or (now - last_plan.generated_at).total_seconds() > 3600: # 1 hour cooldown
+        _generate_learning_plan(user, accuracy_map, status_map)
+        
     return accuracy_map, status_map
 
 
 def _generate_learning_plan(user: User, accuracy: Dict[str, float], status: Dict[str, str]) -> LearningPlan:
     weak_topics = [t for t, s in status.items() if s == "WEAK"]
     improving_topics = [t for t, s in status.items() if s == "IMPROVING"]
-    lessons_qs = Lesson.objects.all()
+    
+    # Optimize: Fetch only necessary fields
+    lessons_qs = Lesson.objects.all().only('id', 'module_id')
+    
+    # Cache LessonProfiles in memory
     topic_to_lessons: Dict[str, List[int]] = {}
-    for lp in LessonProfile.objects.filter(lesson_id__in=list(lessons_qs.values_list("id", flat=True))):
+    profiles = LessonProfile.objects.filter(
+        lesson_id__in=list(lessons_qs.values_list("id", flat=True))
+    ).only('topic', 'lesson_id')
+    
+    for lp in profiles:
         topic = (lp.topic or "").strip()
-        if not topic:
-            continue
+        if not topic: continue
         topic_to_lessons.setdefault(topic, []).append(lp.lesson_id)
+    
     rec_lessons: List[int] = []
     if weak_topics:
         for topic in weak_topics:
@@ -65,9 +103,12 @@ def _generate_learning_plan(user: User, accuracy: Dict[str, float], status: Dict
             rec_lessons.extend((topic_to_lessons.get(topic) or [])[:2])
     else:
         rec_lessons.extend(list(lessons_qs.values_list("id", flat=True))[:3])
+    
     rec_lessons = list(dict.fromkeys(rec_lessons))[:10]
+    
     module_ids = list(Lesson.objects.filter(id__in=rec_lessons).values_list("module_id", flat=True))
     module_ids = list(dict.fromkeys(module_ids))
+    
     reasoning_lines: List[str] = []
     for t in weak_topics:
         pct = round((accuracy.get(t, 0) or 0) * 100)
@@ -75,7 +116,12 @@ def _generate_learning_plan(user: User, accuracy: Dict[str, float], status: Dict
     for t in improving_topics:
         pct = round((accuracy.get(t, 0) or 0) * 100)
         reasoning_lines.append(f"{t} is improving ({pct}%).")
+    
     reasoning = " ".join(reasoning_lines) or "Baseline plan generated."
+    
+    # Clear old plans to keep DB clean (Optional, but helps with speed over time)
+    # LearningPlan.objects.filter(user=user).delete() 
+    
     plan = LearningPlan.objects.create(
         user=user,
         recommended_modules=module_ids,
