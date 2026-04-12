@@ -2,6 +2,7 @@
 # exit on error
 set -o errexit
 
+# Build script for Render
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
