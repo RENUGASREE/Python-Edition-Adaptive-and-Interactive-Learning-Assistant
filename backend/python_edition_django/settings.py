@@ -90,10 +90,11 @@ MIDDLEWARE = [
 
 cors_origins = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 if cors_origins:
-    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+    # Split by comma and strip whitespace AND trailing slashes
+    CORS_ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in cors_origins.split(",") if origin.strip()]
 elif DEBUG:
     CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+        "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
         "https://pythonedition.vercel.app",
@@ -113,12 +114,15 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
+# Ensure no trailing slashes in CSRF_TRUSTED_ORIGINS either
 CSRF_TRUSTED_ORIGINS = [
     "https://pythonedition.vercel.app",
     "https://pythonedition-dkte4qfo5-renuga-sree-ss-projects.vercel.app",
     "https://*.vercel.app",
     "https://*.onrender.com",
 ]
+CSRF_TRUSTED_ORIGINS = [origin.rstrip("/") for origin in CSRF_TRUSTED_ORIGINS]
+
 
 
 ROOT_URLCONF = 'python_edition_django.urls'
