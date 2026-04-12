@@ -32,13 +32,8 @@ class Command(BaseCommand):
             spec = CHALLENGE_DATABASE.get(topic, {}).get(lesson.difficulty)
             
             if not spec:
-                # Basic fallback to ensure no placeholders
-                spec = {
-                    "title": f"Master {lesson.title}",
-                    "desc": f"Create a working example of {lesson.title} that outputs 'Success'.",
-                    "starter": "print('Success')",
-                    "tests": [{"input": "", "expected": "Success"}]
-                }
+                # Skip updating if no specific challenge found, to avoid overwriting good ones
+                continue
 
             challenge, created = Challenge.objects.get_or_create(
                 lesson_id=lesson.id,

@@ -50,9 +50,12 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
         selected_option_id = str(selected_payload.get("selectedOptionId")) if selected_payload and selected_payload.get("selectedOptionId") is not None else None
         is_correct = False
         if selected_payload:
+            # Try to match the option ID first (robust)
             if question.choices.exists():
                 is_correct = any(str(choice.id) == selected_option_id and choice.is_correct for choice in question.choices.all())
-            else:
+                
+            # Fallback: If ID didn't match or question has no choice objects, check the index
+            if not is_correct:
                 raw_index = selected_payload.get("selectedIndex", -1)
                 is_correct = raw_index == int(question.correct_index)
 

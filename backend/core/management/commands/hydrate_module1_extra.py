@@ -8,7 +8,7 @@ from core.models import Lesson, Quiz, Question, Challenge
 
 LESSONS = {
     # ── Lesson 3: Strings ────────────────────────────────────────────────────
-    "les-python-basics-3-beginner": {
+    "m1-5-strings-basics-beginner-beginner": {
         "title": "String Basics — Working with Text",
         "content": """# String Basics — Working with Text
 
@@ -76,7 +76,7 @@ print("Hello World".split()) # ['Hello', 'World']
         },
     },
 
-    "les-python-basics-3-intermediate": {
+    "m1-5-strings-basics-intermediate-intermediate": {
         "title": "String Methods, Formatting & Regex Intro",
         "content": """# String Methods, Formatting & Regex Intro
 
@@ -145,7 +145,7 @@ nums = re.findall(r"\\d+", text)  # ['3', '12']
         },
     },
 
-    "les-python-basics-3-pro": {
+    "m1-5-strings-basics-pro-pro": {
         "title": "String Internals, Unicode & Custom String Protocol",
         "content": """# String Internals, Unicode & Custom String Protocol
 
@@ -217,7 +217,7 @@ print(repr(v)) # Vector(3, 4)
     },
 
     # ── Lesson 4: Numbers & Math ─────────────────────────────────────────────
-    "les-python-basics-4-beginner": {
+    "m1-6-numbers-math-beginner-beginner": {
         "title": "Numbers & Math Operators",
         "content": """# Numbers & Math Operators
 
@@ -284,7 +284,7 @@ print(round(3.567, 2))  # 3.57
         },
     },
 
-    "les-python-basics-4-intermediate": {
+    "m1-6-numbers-math-intermediate-intermediate": {
         "title": "Numeric Precision, math Module & Bitwise Ops",
         "content": """# Numeric Precision, math Module & Bitwise Ops
 
@@ -346,7 +346,7 @@ print(Decimal("0.1") + Decimal("0.2"))  # 0.3
         },
     },
 
-    "les-python-basics-4-pro": {
+    "m1-6-numbers-math-pro-pro": {
         "title": "Numeric Tower, Arbitrary Precision & Complex Numbers",
         "content": """# Numeric Tower, Arbitrary Precision & Complex Numbers
 
@@ -414,7 +414,7 @@ print(z.conjugate()) # (3-4j)
     },
 
     # ── Lesson 5: User Input ─────────────────────────────────────────────────
-    "les-python-basics-5-beginner": {
+    "m1-7-type-casting-beginner-beginner": {
         "title": "User Input & Type Conversion",
         "content": """# User Input & Type Conversion
 
@@ -480,7 +480,7 @@ print("Age: " + s)   # Age: 42
         },
     },
 
-    "les-python-basics-5-intermediate": {
+    "m1-7-type-casting-intermediate-intermediate": {
         "title": "Input Validation, Error Handling & Multiple Inputs",
         "content": """# Input Validation, Error Handling & Multiple Inputs
 
@@ -549,7 +549,7 @@ nums = list(map(int, data[1:n+1]))
         },
     },
 
-    "les-python-basics-5-pro": {
+    "m1-7-type-casting-pro-pro": {
         "title": "Custom Input Parsers & Context Protocol",
         "content": """# Custom Input Parsers & Context Protocol
 
@@ -648,7 +648,7 @@ class Command(BaseCommand):
                     content=data["content"],
                 )
                 if not updated:
-                    self.stdout.write(self.style.WARNING(f"  ⚠  Not found: {lesson_id}"))
+                    self.stdout.write(self.style.WARNING(f"  [WARN]  Not found: {lesson_id}"))
                     continue
 
                 quiz, _ = Quiz.objects.get_or_create(
@@ -669,6 +669,7 @@ class Command(BaseCommand):
                 ch = data["challenge"]
                 Challenge.objects.filter(lesson_id=lesson_id).delete()
                 Challenge.objects.create(
+                    id=f"ch-{lesson_id}",
                     lesson_id=lesson_id,
                     title=ch["title"],
                     description=ch["description"],
@@ -678,6 +679,6 @@ class Command(BaseCommand):
                     points=20,
                 )
                 count += 1
-                self.stdout.write(f"  ✅ {lesson_id}")
+                self.stdout.write(f"  OK {lesson_id}")
 
-        self.stdout.write(self.style.SUCCESS(f"\n🎉 Hydrated {count} lessons (3-5) in Module 1"))
+        self.stdout.write(self.style.SUCCESS(f"\nDONE Hydrated {count} lessons (3-5) in Module 1"))
