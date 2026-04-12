@@ -59,8 +59,8 @@ def _lesson_markdown(spec: LessonSpec) -> str:
 
     # --- 2. Why This Matters ---
     matters = {
-        "input_output": "Every interactive program depends on I/O — from simple CLI tools to complex web applications that handle user data.",
-        "variables": "Every program you write depends on storing and updating data — from user input to calculations and system state. Variables are the foundation of all programming logic.",
+        "input_output": "Every interactive program depends on I/O - from simple CLI tools to complex web applications that handle user data.",
+        "variables": "Every program you write depends on storing and updating data - from user input to calculations and system state. Variables are the foundation of all programming logic.",
         "types": "Data integrity prevents 90% of production bugs. Understanding types is non-negotiable for building reliable, professional software.",
         "if_else": "Logic is the brain of your application. Branching allows for personalization, security checks, and complex business rules.",
         "loops_for": "Scaling requires automation. Whether processing 10 records or 10 million, loops are the engine of data processing.",
@@ -73,7 +73,7 @@ def _lesson_markdown(spec: LessonSpec) -> str:
     # --- 3. Concept Explanation (Level-Based) ---
     explanations = {
         "variables": {
-            "Beginner": "In Python, a variable is a **name that refers to a value stored in memory**.\n\nUnlike some other languages, Python is **dynamically typed**, which means:\n- You don’t need to declare a type (int, string, etc.)\n- The type is automatically determined at runtime",
+            "Beginner": "In Python, a variable is a **name that refers to a value stored in memory**.\n\nUnlike some other languages, Python is **dynamically typed**, which means:\n- You don't need to declare a type (int, string, etc.)\n- The type is automatically determined at runtime",
             "Intermediate": "Variables in Python act as **symbolic names** that are references to objects. Python's dynamic typing means the variable itself has no type, but the object it points to does.\n\nKey behaviors:\n- Reassignment changes the reference, not the object itself\n- Multiple names can point to the same memory address",
             "Pro": "Python variables are entries in a **namespace dictionary**. Understanding the difference between 'name binding' and 'assignment' is critical for optimizing memory and performance.\n\nDeep dive:\n- CPython uses reference counting for memory management\n- The `id()` function reveals the memory address of the object a variable points to"
         },
@@ -93,7 +93,7 @@ def _lesson_markdown(spec: LessonSpec) -> str:
             "Pro": "Visualize a **Pointer in a Hash Map**. Namespaces are essentially dictionaries where names are keys and memory addresses are values."
         }
     }
-    model = models.get(topic, {}).get(level, f"Think of **{title}** as a specialized tool in your engineering toolkit—designed for a specific job, but powerful when combined with others.")
+    model = models.get(topic, {}).get(level, f"Think of **{title}** as a specialized tool in your engineering toolkit - designed for a specific job, but powerful when combined with others.")
 
     # --- 5. Code Examples ---
     codes = {
@@ -119,41 +119,41 @@ def _lesson_markdown(spec: LessonSpec) -> str:
 
 {intro}
 
-🚀 **Why This Matters**
+## Why This Matters
 {matter}
 
-🧠 **Concept Explanation**
+## Concept Explanation
 {explanation}
 
-💡 **Mental Model**
+## Mental Model
 {model}
 
-🧪 **Code Example**
+## Code Example
 ```python
 {code}
 ```
 
-🌍 **Real-World Application**
+## Real-World Application
 {app}
 
-⚠️ **Common Mistakes**
+## Common Mistakes
 - { "Forgetting to update the variable value" if level == "Beginner" else "Using global variables unnecessarily" if level == "Intermediate" else "Ignoring memory overhead in large data structures" }
 - { "Using incorrect naming conventions" if level == "Beginner" else "Not handling edge cases in input" if level == "Intermediate" else "Ignoring the Global Interpreter Lock (GIL) limitations" }
 
-✅ **Best Practices**
+## Best Practices
 - Use descriptive, **snake_case** names.
 - Keep functions small and focused.
 - { "Add helpful comments" if level == "Beginner" else "Follow PEP 8 guidelines" if level == "Intermediate" else "Write unit tests for core logic" }
 
-🏆 **Mini Challenge**
+## Mini Challenge
 Head over to the **Challenge** tab to apply these concepts in our interactive code editor!
 
-📝 **Knowledge Check**
+## Knowledge Check
 1. How does Python handle the data type of a variable?
 2. What happens to the memory when a variable is reassigned?
 
-💡 **Pro Tip**
-{ "Python is readable like English—keep it simple!" if level == "Beginner" else "Use `help()` to explore any object's methods." if level == "Intermediate" else "Use `__slots__` to save memory in classes with many instances." }
+## Pro Tip
+{ "Python is readable like English - keep it simple!" if level == "Beginner" else "Use `help()` to explore any object's methods." if level == "Intermediate" else "Use `__slots__` to save memory in classes with many instances." }
 """
     return markdown.strip()
 
@@ -414,6 +414,66 @@ def _question_bank(spec: LessonSpec) -> list[dict]:
     return [q1, q2]
 
 
+def _lesson_markdown_structured(spec: LessonSpec) -> str:
+    title = spec.title.replace(f" ({spec.difficulty})", "")
+    level = spec.difficulty
+
+    level_explanation = {
+        "Beginner": "Use direct syntax and simple examples. Prioritize clarity over completeness.",
+        "Intermediate": "Focus on practical patterns, common workflows, and decision points.",
+        "Pro": "Focus on internals, performance tradeoffs, and implementation details.",
+    }
+    code_example = {
+        "Beginner": f"print('Learning {title}')",
+        "Intermediate": f"def use_{spec.topic}(value):\n    return value",
+        "Pro": "import time\nstart = time.perf_counter()\n# implementation detail\nduration = time.perf_counter() - start\nprint(round(duration, 6))",
+    }
+    challenge_focus = {
+        "Beginner": "Implement the core syntax correctly and verify the output exactly.",
+        "Intermediate": "Apply the concept in a realistic flow with clean structure.",
+        "Pro": "Solve with correctness plus runtime or architectural tradeoffs in mind.",
+    }
+
+    return f"""# {title}
+
+## Definition
+{title} is a core Python concept used to express program behavior clearly and reliably.
+
+## Why It Matters
+This concept appears in real applications, interviews, automation scripts, and production code paths.
+
+## Concept Explanation
+{level_explanation.get(level, level_explanation["Beginner"])}
+
+## Mental Model
+Think of {title} as a building block in a larger system: each use should be predictable and composable.
+
+## Code Example
+```python
+{code_example.get(level, code_example["Beginner"])}
+```
+This example highlights the minimal pattern you should recognize and reproduce.
+
+## Real-World Use
+You will use this concept while writing APIs, processing data, and building maintainable application logic.
+
+## Common Mistakes
+- Treating syntax as memorization instead of understanding behavior.
+- Skipping edge cases for input, state, or output format.
+
+## Best Practices
+- Keep naming clear and intent-focused.
+- Validate assumptions with small tests before scaling complexity.
+
+## Knowledge Check
+1. What rule must always hold when you apply {title}?
+2. What edge case can break a naive implementation of {title}?
+
+## Challenge
+{challenge_focus.get(level, challenge_focus["Beginner"])}
+"""
+
+
 def _challenge_spec(spec: LessonSpec) -> dict:
     """
     Generates difficulty-appropriate challenge specifications for each lesson.
@@ -663,7 +723,7 @@ class Command(BaseCommand):
                     created_modules += 1
                 module_by_order[order] = module
 
-            # Certificates (templates) – ensure 5 exist (module completion certs)
+            # Certificates (templates) - ensure 5 exist (module completion certs)
             cert_templates = [
                 ("cert-fundamentals", "Python Fundamentals Certificate", "Awarded after completing Python Fundamentals."),
                 ("cert-control-flow", "Control Flow Certificate", "Awarded after completing Control Flow."),
@@ -731,7 +791,7 @@ class Command(BaseCommand):
                 )
                 created_challenges += 1
 
-            # Badges – create 10 (in gamification + core for admin visibility)
+            # Badges - create 10 (in gamification + core for admin visibility)
             badges = [
                 ("first-lesson", "First Lesson", "Complete your first lesson."),
                 ("diagnostic-done", "Placement Completed", "Finish the placement diagnostic quiz."),
@@ -764,7 +824,7 @@ class Command(BaseCommand):
                         "module_id": module.id,
                         "title": spec.title,
                         "slug": slug,
-                        "content": _lesson_markdown(spec),
+                        "content": _lesson_markdown_structured(spec),
                         "order": spec.lesson_order,
                         "duration": spec.duration,
                         "difficulty": spec.difficulty,
@@ -843,7 +903,7 @@ class Command(BaseCommand):
                 )
                 upserted_profiles += 1
 
-            # Challenges – Link EVERY lesson to a difficulty-appropriate challenge
+            # Challenges - Link EVERY lesson to a difficulty-appropriate challenge
             created_challenges = 0
             for spec in lesson_specs:
                 module = module_by_order[spec.module_order]
@@ -874,14 +934,14 @@ class Command(BaseCommand):
             # Badges
             created_badges = 0
             badges_data = [
-                ("first-steps", "First Steps – Complete first lesson"),
-                ("quiz-master", "Quiz Master – Score 80%+ in placement quiz"),
-                ("consistency-starter", "Consistency Starter – 3 day streak"),
-                ("code-warrior", "Code Warrior – Complete 10 lessons"),
-                ("python-apprentice", "Python Apprentice – Complete Module 1"),
-                ("python-expert", "Python Expert – Complete all modules"),
-                ("perfect-score", "Perfect Score – 100% on any quiz"),
-                ("fast-learner", "Fast Learner – Finish module in under 3 days"),
+                ("first-steps", "First Steps - Complete first lesson"),
+                ("quiz-master", "Quiz Master - Score 80%+ in placement quiz"),
+                ("consistency-starter", "Consistency Starter - 3 day streak"),
+                ("code-warrior", "Code Warrior - Complete 10 lessons"),
+                ("python-apprentice", "Python Apprentice - Complete Module 1"),
+                ("python-expert", "Python Expert - Complete all modules"),
+                ("perfect-score", "Perfect Score - 100% on any quiz"),
+                ("fast-learner", "Fast Learner - Finish module in under 3 days"),
             ]
             for code, title in badges_data:
                 obj, was_created = GamificationBadge.objects.get_or_create(
@@ -917,3 +977,4 @@ class Command(BaseCommand):
                 f"at {timezone.now().isoformat(timespec='seconds')}"
             )
         )
+

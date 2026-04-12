@@ -222,7 +222,7 @@ export default function PlacementQuiz() {
             return {
               questionId: q.id,
               selectedIndex: answers[q.id] !== undefined ? answers[q.id] : -1,
-              isCorrect: selectedOpt?.is_correct || selectedOpt?.correct || false,
+              selectedOptionId: selectedOpt?.id ?? null,
             };
           }),
           violationCount,

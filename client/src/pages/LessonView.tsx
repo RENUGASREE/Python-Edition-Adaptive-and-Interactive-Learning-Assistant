@@ -496,8 +496,7 @@ export default function LessonView() {
                </Link>
              )}
              {nextLessonId && (
-               <Link href={`/lesson/${nextLessonId}`}>
-                 <Button 
+                 <Button
                   size="lg"
                   className="rounded-full px-8 h-14 text-lg font-semibold gap-2 shadow-lg shadow-primary/20"
                   onClick={() => {
@@ -535,7 +534,6 @@ export default function LessonView() {
                   Next Lesson
                   <ArrowRight className="w-5 h-5" />
                 </Button>
-               </Link>
              )}
            </div>
            {/* Progress Indicator */}
