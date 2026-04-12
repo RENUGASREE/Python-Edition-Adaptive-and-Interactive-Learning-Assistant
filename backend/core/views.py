@@ -1708,3 +1708,20 @@ class ModuleQuizView(APIView):
                 quiz_id__in=Quiz.objects.filter(lesson_id__in=lesson_ids)
             ).count()
         })
+
+class CertificateVerifyView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def get(self, request, code):
+        try:
+            cert = Certificate.objects.get(verification_code=code)
+            return Response({
+                "valid": True,
+                "user": f"{cert.user.first_name} {cert.user.last_name}" if cert.user.first_name else cert.user.username,
+                "module": cert.module,
+                "issued_at": cert.issued_at,
+                "code": str(cert.verification_code)
+            })
+        except Certificate.DoesNotExist:
+            return Response({"valid": False, "message": "Certificate not found"}, status=status.HTTP_404_NOT_FOUND)
+
