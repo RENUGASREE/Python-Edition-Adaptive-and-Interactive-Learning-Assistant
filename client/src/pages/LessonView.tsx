@@ -251,22 +251,26 @@ export default function LessonView() {
             spread: 70,
             origin: { y: 0.6 }
           });
+          
+          // Determine the message based on current progress
+          const currentProgress = progress?.find(p => p.lessonId === lessonId);
+          const quizDone = currentProgress?.quizCompleted;
+          
           toast({
-            title: "Challenge Passed! ✅",
-            description: "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
+            title: quizDone ? "Challenge Passed! ✅" : "Challenge Passed! ✅",
+            description: quizDone 
+              ? "Challenge passed! Next lesson unlocked ✅" 
+              : "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
             className: "bg-green-500 text-white border-none",
           });
+          
           setMasteryImpact(0.06);
           setIsCompleted(true);
           
           if (user) {
-            // Refetch all relevant data to reflect the challenge completion
-            await Promise.all([
-              queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/lessons"] }),
-              refetch()
-            ]);
+            // Refetch faster by only invalidating what's needed
+            queryClient.invalidateQueries({ queryKey: ["/api/user-progress"] });
+            refetch();
           }
         } else {
           setError(result.error || "Code ran but didn't pass all test cases. Check your output above.");
@@ -328,9 +332,15 @@ export default function LessonView() {
           spread: 70,
           origin: { y: 0.6 },
         });
+
+        const currentProgress = progress?.find(p => p.lessonId === lessonId);
+        const quizDone = currentProgress?.quizCompleted;
+
         toast({
-          title: "Challenge Passed! ✅",
-          description: "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
+          title: quizDone ? "Challenge Passed! ✅" : "Challenge Passed! ✅",
+          description: quizDone 
+            ? "Challenge passed! Next lesson unlocked ✅" 
+            : "Great job! Your solution is correct. Complete the Knowledge Check to unlock the next lesson.",
           className: "bg-green-500 text-white border-none",
         });
         setMasteryImpact(0.06);
@@ -348,12 +358,8 @@ export default function LessonView() {
               completedAt: new Date().toISOString(),
             });
             
-            // Refetch all relevant data to reflect the challenge completion
-            await Promise.all([
-              queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
-              queryClient.refetchQueries({ queryKey: ["/api/lessons"] })
-            ]);
+            queryClient.invalidateQueries({ queryKey: ["/api/user-progress"] });
+            refetch();
           } catch (err) {
             console.error("Error updating progress after challenge:", err);
           }
@@ -617,17 +623,20 @@ export default function LessonView() {
                         lastCode: JSON.stringify(answers)
                       });
                       
-                      // Refetch all relevant data to see if overall completion is now True
-                      await Promise.all([
-                        queryClient.refetchQueries({ queryKey: ["/api/user-progress"] }),
-                        queryClient.refetchQueries({ queryKey: ["/api/modules"] }),
-                        queryClient.refetchQueries({ queryKey: ["/api/lessons"] }),
-                        refetch()
-                      ]);
+                      // Refetch and show message
+                      queryClient.invalidateQueries({ queryKey: ["/api/user-progress"] });
+                      await refetch();
                       
-                      const motivationalMessage = score >= 80 
-                        ? "Great job! Now complete the Coding Challenge to unlock the next lesson."
-                        : "Keep learning! Complete the Coding Challenge to unlock the next lesson.";
+                      // Get updated progress to check if challenge is also done
+                      const updatedProgress = queryClient.getQueryData<any[]>(["/api/user-progress"])
+                        ?.find(p => p.lessonId === lessonId);
+                      const challengeDone = updatedProgress?.challengeCompleted;
+
+                      const motivationalMessage = challengeDone
+                        ? "Choice well made! Next lesson unlocked ✅"
+                        : (score >= 80 
+                          ? "Great job! Now complete the Coding Challenge to unlock the next lesson."
+                          : "Keep learning! Complete the Coding Challenge to unlock the next lesson.");
                       
                       toast({
                         title: "Knowledge Check Completed! ✅",

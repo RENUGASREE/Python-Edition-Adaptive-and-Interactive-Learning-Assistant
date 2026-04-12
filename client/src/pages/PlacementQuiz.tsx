@@ -128,21 +128,28 @@ export default function PlacementQuiz() {
       });
     };
     const onVisibility = () => {
-      if (document.hidden) {
-        registerViolation();
-      }
+      // Small delay to prevent accidental triggers from background popups/notifications
+      setTimeout(() => {
+        if (document.hidden) {
+          registerViolation();
+        }
+      }, 300);
     };
     const onBlur = () => {
-      registerViolation();
+       // Only register blur if tab isn't already hidden (to avoid double counting)
+       if (!document.hidden) {
+         registerViolation();
+       }
     };
     const onContext = (e: Event) => {
-      e.preventDefault();
+      // Allow right-click but maybe warn? Many people use it for translation etc.
+      // e.preventDefault(); 
     };
     const onKey = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl && (key === "c" || key === "v")) {
-        e.preventDefault();
+        // e.preventDefault(); // Might be too restrictive for some setups
       }
       if (key === "f12" || (ctrl && key === "shift")) {
         e.preventDefault();
@@ -161,7 +168,8 @@ export default function PlacementQuiz() {
   }, []);
 
   useEffect(() => {
-    if (violationCount >= 3 && !expired) {
+    const VIOLATION_LIMIT = 5;
+    if (violationCount >= VIOLATION_LIMIT && !expired) {
       setExpired(true);
       if (attemptId && !hasSubmittedRef.current) {
         handleSubmit(true);
@@ -478,8 +486,11 @@ export default function PlacementQuiz() {
                 You need to complete the placement quiz to personalize your learning path.
               </div>
             )}
-            <div className="text-xs text-muted-foreground mt-2">
-              Time left: {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2">
+              <span>Time left: {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}</span>
+              <span className={cn(violationCount > 0 ? "text-orange-500 font-medium" : "")}>
+                Violations: {violationCount} / 5
+              </span>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">

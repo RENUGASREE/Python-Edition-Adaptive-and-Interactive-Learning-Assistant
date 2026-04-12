@@ -486,6 +486,49 @@ class RunChallengeView(APIView):
     def _extract_numeric_tokens(self, text):
         return re.findall(r"-?\d+\.?\d*", text)
 
+    def _validate_code_patterns(self, code, required_patterns):
+        """
+        Validates code using regex patterns and AST analysis.
+        required_patterns can be a list of strings (regex) or special keys.
+        """
+        if not required_patterns:
+            return True, None
+
+        import ast
+        try:
+            tree = ast.parse(code)
+        except Exception as e:
+            return False, f"Syntax Error: {str(e)}"
+
+        for pattern in required_patterns:
+            if isinstance(pattern, str):
+                # Special AST-based checks
+                if pattern.startswith("ast:"):
+                    check_type = pattern.split(":")[1]
+                    if check_type == "assignment":
+                        # Check if any Assignment node exists
+                        has_assignment = any(isinstance(node, ast.Assign) for node in ast.walk(tree))
+                        if not has_assignment:
+                            return False, "Validation Error: You must create at least one variable (assignment)."
+                    elif check_type.startswith("variable:"):
+                        var_name = check_type.split(":")[1]
+                        # Check if a specific variable is assigned
+                        assigned_vars = set()
+                        for node in ast.walk(tree):
+                            if isinstance(node, ast.Assign):
+                                for target in node.targets:
+                                    if isinstance(target, ast.Name):
+                                        assigned_vars.add(target.id)
+                        if var_name not in assigned_vars:
+                            return False, f"Validation Error: You must define a variable named '{var_name}'."
+                else:
+                    # Regex check
+                    import re
+                    if not re.search(pattern, code, re.MULTILINE):
+                        return False, f"Validation Error: Your code is missing a required element (pattern: {pattern})."
+        
+        return True, None
+
     def is_output_equivalent(self, expected, actual):
         expected = (expected or "").strip()
         actual = (actual or "").strip()
@@ -639,6 +682,13 @@ class RunChallengeView(APIView):
                         all_passed = self.is_output_equivalent(cleaned_expected, cleaned_stdout)
                         if not all_passed:
                             error_message = f"Expected '{cleaned_expected}', got '{cleaned_stdout}'"
+
+            # 3. Code Pattern Validation (New)
+            if all_passed and challenge.required_code_patterns:
+                patterns_ok, pat_err = self._validate_code_patterns(code, challenge.required_code_patterns)
+                if not patterns_ok:
+                    all_passed = False
+                    error_message = pat_err
 
             if challenge and challenge.lesson_id:
                 lesson = Lesson.objects.filter(id=challenge.lesson_id).first()

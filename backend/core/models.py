@@ -65,6 +65,7 @@ class Challenge(models.Model):
     initial_code = models.TextField()
     solution_code = models.TextField(blank=True, null=True)
     test_cases = models.JSONField()
+    required_code_patterns = models.JSONField(blank=True, null=True)
     points = models.IntegerField(blank=True, null=True)
     difficulty = models.TextField(blank=True, null=True)
 
