@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: python-edition-backend
+    env: python
+    region: ohio
+    plan: free
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn python_edition_django.wsgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.9
+    rootDir: backend
