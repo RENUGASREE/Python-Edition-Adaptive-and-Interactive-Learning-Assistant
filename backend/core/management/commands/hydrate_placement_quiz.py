@@ -2,7 +2,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from assessments.models import DiagnosticQuiz, DiagnosticQuestion
-from core.models import Quiz, Question, DiagnosticQuestionMeta
+from core.models import Quiz, Question
 
 QUESTIONS = [
     # --- Module 1: Basics ---
@@ -74,7 +74,6 @@ class Command(BaseCommand):
         # Core app cleanup
         Quiz.objects.filter(id="quiz-placement-test").delete()
         Question.objects.filter(quiz_id="quiz-placement-test").delete()
-        DiagnosticQuestionMeta.objects.all().delete()
         
         # Assessments app cleanup
         DiagnosticQuiz.objects.filter(title__iexact="Python Placement Diagnostic").delete()

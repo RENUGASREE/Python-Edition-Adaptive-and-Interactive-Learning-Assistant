@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
-from core.models import User, Module, Lesson, Quiz, Question, Challenge, DiagnosticQuestionMeta
+from core.models import User, Module, Lesson, Quiz, Question, Challenge
 from django.contrib.auth.hashers import make_password
 
 class Command(BaseCommand):
@@ -17,11 +17,6 @@ class Command(BaseCommand):
             action='store_true',
             help='Seed adaptive lessons, module quizzes, and challenges',
         )
-        parser.add_argument(
-            '--seed-diagnostic-quiz',
-            action='store_true',
-            help='Seed the 30-question diagnostic quiz and tags',
-        )
 
     def handle(self, *args, **kwargs):
         if kwargs.get('seed_placement_quiz'):
@@ -29,9 +24,6 @@ class Command(BaseCommand):
             return
         if kwargs.get('seed_adaptive_curriculum'):
             self.seed_adaptive_curriculum()
-            return
-        if kwargs.get('seed_diagnostic_quiz'):
-            self.seed_diagnostic_quiz()
             return
 
         with connection.cursor() as cursor:
@@ -301,74 +293,6 @@ class Command(BaseCommand):
                 ])
 
         self.stdout.write(self.style.SUCCESS('Adaptive curriculum seeded successfully'))
-
-    def seed_diagnostic_quiz(self):
-        module = Module.objects.order_by('order').first()
-        if module:
-            lesson = Lesson.objects.filter(module_id=module.id).order_by('order').first()
-        else:
-            lesson = Lesson.objects.order_by('id').first()
-
-        if not lesson:
-            self.stdout.write(self.style.ERROR('No lesson found to attach diagnostic quiz'))
-            return
-
-        quiz, _ = Quiz.objects.get_or_create(lesson_id=lesson.id, title='Diagnostic Quiz')
-        existing_questions = list(Question.objects.filter(quiz_id=quiz.id))
-        if existing_questions:
-            DiagnosticQuestionMeta.objects.filter(question_id__in=[q.id for q in existing_questions]).delete()
-            Question.objects.filter(quiz_id=quiz.id).delete()
-
-        modules = [
-            ("Basics", 6),
-            ("Control Flow", 5),
-            ("Loops", 5),
-            ("Functions", 5),
-            ("Data Structures", 5),
-            ("OOPS", 4),
-        ]
-        difficulties = ["easy", "medium", "hard"]
-        questions = []
-
-        for module_name, count in modules:
-            for idx in range(count):
-                difficulty = difficulties[idx % len(difficulties)]
-                correct_text = f"{module_name} concept {idx + 1}"
-                options = [
-                    {"text": f"{correct_text} correct usage", "correct": True},
-                    {"text": f"{module_name} concept {idx + 1} incorrect usage", "correct": False},
-                    {"text": "Unrelated Python topic", "correct": False},
-                    {"text": "Invalid syntax choice", "correct": False},
-                ]
-                questions.append({
-                    "text": f"[{module_name}] Select the correct statement for question {idx + 1}.",
-                    "options": options,
-                    "difficulty": difficulty,
-                    "module_tag": module_name,
-                })
-
-        with transaction.atomic():
-            created_questions = Question.objects.bulk_create([
-                Question(
-                    quiz_id=quiz.id,
-                    text=q["text"],
-                    type="multiple_choice",
-                    options=q["options"],
-                    points=10,
-                )
-                for q in questions
-            ])
-
-            DiagnosticQuestionMeta.objects.bulk_create([
-                DiagnosticQuestionMeta(
-                    question_id=question.id,
-                    module_tag=questions[idx]["module_tag"],
-                    difficulty=questions[idx]["difficulty"],
-                )
-                for idx, question in enumerate(created_questions)
-            ])
-
-        self.stdout.write(self.style.SUCCESS(f'Diagnostic quiz seeded with {len(questions)} questions for lesson {lesson.id}'))
 
     def build_lesson_content(self, base_content, module_title, lesson_title, level):
         focus = {

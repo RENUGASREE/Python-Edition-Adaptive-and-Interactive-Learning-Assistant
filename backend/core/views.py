@@ -1,10 +1,10 @@
 from django.contrib.auth import authenticate, login, logout
-from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery, DiagnosticAttempt, DiagnosticQuestionMeta
+from .models import User, Progress, QuizAttempt, Badge, Certificate, Recommendation, ChatMessage, Module, Lesson, UserProgress, Challenge, Quiz, Question, UserMastery
 from rest_framework import generics, permissions, viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import UserSerializer, ProgressSerializer, QuizAttemptSerializer, BadgeSerializer, CertificateSerializer, RecommendationSerializer, ChatMessageSerializer, ModuleSerializer, LessonSerializer, UserProgressSerializer, QuizSerializer, QuestionSerializer, ChallengeSerializer, UserMasterySerializer, DiagnosticAttemptSerializer, DiagnosticQuestionMetaSerializer
+from .serializers import UserSerializer, ProgressSerializer, QuizAttemptSerializer, BadgeSerializer, CertificateSerializer, RecommendationSerializer, ChatMessageSerializer, ModuleSerializer, LessonSerializer, UserProgressSerializer, QuizSerializer, QuestionSerializer, ChallengeSerializer, UserMasterySerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -1037,82 +1037,6 @@ class RecommendationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
-
-class DiagnosticSubmitView(APIView):
-    permission_classes = (permissions.IsAuthenticated,)
-
-    def post(self, request):
-        quiz_id = request.data.get("quizId")
-        answers = request.data.get("answers", [])
-        if not quiz_id or not isinstance(answers, list):
-            return Response({"message": "quizId and answers are required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        questions = list(Question.objects.filter(quiz_id=quiz_id))
-        if not questions:
-            return Response({"message": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        answers_map = {}
-        for answer in answers:
-            q_id = answer.get("questionId")
-            selected_index = answer.get("selectedIndex")
-            if q_id is not None:
-                # Convert to string to match Question.id (which is a CharField)
-                answers_map[str(q_id)] = selected_index
-
-        module_totals = {}
-        module_correct = {}
-        total_questions = 0
-        correct_answers = 0
-
-        for question in questions:
-            # question.id is already a string
-            meta = DiagnosticQuestionMeta.objects.filter(question_id=question.id).first()
-            if not meta:
-                continue
-            module_tag = meta.module_tag
-            options = question.options or []
-            correct_index = None
-            for idx, opt in enumerate(options):
-                if opt.get("correct"):
-                    correct_index = idx
-                    break
-            total_questions += 1
-            module_totals[module_tag] = module_totals.get(module_tag, 0) + 1
-            selected_index = answers_map.get(question.id)
-            if selected_index is not None and correct_index is not None and int(selected_index) == int(correct_index):
-                correct_answers += 1
-                module_correct[module_tag] = module_correct.get(module_tag, 0) + 1
-
-        if total_questions == 0:
-            return Response({"message": "No diagnostic questions available"}, status=status.HTTP_400_BAD_REQUEST)
-
-        module_scores = {}
-        for module_tag, total in module_totals.items():
-            score = (module_correct.get(module_tag, 0) / total) * 100
-            module_scores[module_tag] = round(score, 2)
-
-        overall_score = round((correct_answers / total_questions) * 100, 2)
-
-        DiagnosticAttempt.objects.create(
-            user=request.user,
-            quiz_id=quiz_id,
-            module_scores=module_scores,
-            overall_score=overall_score,
-        )
-
-        for module_tag, score in module_scores.items():
-            module = Module.objects.filter(title__iexact=module_tag).first()
-            if module:
-                update_user_mastery(request.user, module.id, score, "diagnostic")
-        request.user.diagnostic_completed = True
-        request.user.has_taken_quiz = True
-        request.user.save(update_fields=["diagnostic_completed", "has_taken_quiz"])
-
-        return Response({
-            "moduleScores": module_scores,
-            "overallScore": overall_score,
-            "masteryVector": request.user.mastery_vector or {},
-        })
 
 class MasteryUpdateView(APIView):
     permission_classes = (permissions.IsAuthenticated,)

@@ -27,7 +27,7 @@ class DiagnosticQuestionSerializer(serializers.ModelSerializer):
         return opts
 
 
-class DiagnosticAttemptSerializer(serializers.ModelSerializer):
+class DiagnosticQuizAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = DiagnosticQuizAttempt
         fields = "__all__"
