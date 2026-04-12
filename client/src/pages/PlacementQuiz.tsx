@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useModules } from "@/hooks/use-modules";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiUrl, getAccessToken } from "@/lib/api";
 import { Link, useLocation } from "wouter";
@@ -69,6 +69,8 @@ export default function PlacementQuiz() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const lastViolationTsRef = useMemo(() => ({ ts: 0 }), []);
+  const isSubmittingRef = useRef(false);
+  const hasSubmittedRef = useRef(false);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -161,11 +163,11 @@ export default function PlacementQuiz() {
   useEffect(() => {
     if (violationCount >= 3 && !expired) {
       setExpired(true);
-      if (attemptId) {
+      if (attemptId && !hasSubmittedRef.current) {
         handleSubmit(true);
       }
     } else if (expired) {
-      if (attemptId) {
+      if (attemptId && !hasSubmittedRef.current && !isSubmittingRef.current) {
         handleSubmit(true);
       }
     }
@@ -183,6 +185,7 @@ export default function PlacementQuiz() {
   };
 
   const handleSubmit = async (auto?: boolean) => {
+    if (hasSubmittedRef.current || isSubmittingRef.current) return;
     setError(null);
     if (!quiz || questions.length === 0) {
       setError("No placement quiz is available right now.");
@@ -203,6 +206,7 @@ export default function PlacementQuiz() {
     }
 
     try {
+      isSubmittingRef.current = true;
       setSubmitting(true);
       const accessToken = getAccessToken();
       if (!accessToken) {
@@ -247,9 +251,11 @@ export default function PlacementQuiz() {
       await queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
       
       if (violationCount >= 3) {
+        hasSubmittedRef.current = true;
         setViolationDialog(true);
         setExpired(true);
       } else {
+        hasSubmittedRef.current = true;
         toast({
           title: data?.timeUp ? "Time is up. Your quiz has been submitted." : "Placement quiz completed",
           description: `Score: ${Math.round((data?.weightedScore || data?.overallScore || 0) * 100)}%`,
@@ -278,6 +284,7 @@ export default function PlacementQuiz() {
     } catch (err: any) {
       setError(err.message || "Failed to submit diagnostic quiz");
     } finally {
+      isSubmittingRef.current = false;
       setSubmitting(false);
     }
   };

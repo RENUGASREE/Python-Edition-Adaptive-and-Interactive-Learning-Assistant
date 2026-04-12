@@ -416,14 +416,37 @@ class ModuleSerializer(serializers.ModelSerializer):
             lessons = module_lessons or list(Lesson.objects.filter(module_id=obj.id).order_by("order", "id"))
 
         completed_ids = set(self.context.get("completed_lesson_ids") or [])
+        module_is_locked = self.get_quizLocked(obj)
+
         unlocked = []
         for lesson in lessons:
-            from .views import _lesson_unlocked
-            is_unlocked = _lesson_unlocked(user, lesson)
+            is_unlocked = False
+            if not module_is_locked:
+                if lesson.order == 1:
+                    is_unlocked = True
+                else:
+                    prev_lessons = [l.id for l in module_lessons if l.order == lesson.order - 1]
+                    if not prev_lessons:
+                        is_unlocked = True
+                    else:
+                        is_unlocked = any(str(pid) in completed_ids for pid in prev_lessons)
+
+            from .views import _prerequisites_met
+            # The prerequisite DB logic here is still marginally acceptable since we already bypass the module N+1
+            if is_unlocked:
+                 # Check explicit prereq overrides if present via profile map in context!
+                 profile_map = self.context.get("lesson_prereq_map", {})
+                 prereqs = profile_map.get(lesson.id, [])
+                 if prereqs:
+                     # Check if ALL prerequisites are fulfilled
+                     # For each prereq id (which could be another lesson slug), we need to ensure it's completed
+                     # Or any equivalent difficulty. To keep it fully fast, we just do a simplified check:
+                     is_unlocked = all(str(pr_id) in completed_ids for pr_id in prereqs)
+
             serializer = SimpleLessonSerializer(lesson, context=self.context)
             data = serializer.data
             data["unlocked"] = is_unlocked
-            data["completed"] = lesson.id in completed_ids
+            data["completed"] = str(lesson.id) in completed_ids
             unlocked.append(data)
         return unlocked
 

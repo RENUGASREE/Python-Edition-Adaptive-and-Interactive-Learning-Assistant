@@ -417,60 +417,89 @@ def _question_bank(spec: LessonSpec) -> list[dict]:
 def _lesson_markdown_structured(spec: LessonSpec) -> str:
     title = spec.title.replace(f" ({spec.difficulty})", "")
     level = spec.difficulty
+    topic = spec.topic
 
-    level_explanation = {
-        "Beginner": "Use direct syntax and simple examples. Prioritize clarity over completeness.",
-        "Intermediate": "Focus on practical patterns, common workflows, and decision points.",
-        "Pro": "Focus on internals, performance tradeoffs, and implementation details.",
+    # Explanations tailored by difficulty
+    explanations = {
+        "variables": {
+            "Beginner": "In Python, a variable is a name that refers to a value stored in memory. You do not need to declare its type; Python infers it dynamically at runtime.",
+            "Intermediate": "Variables in Python are symbolic references to objects. Reassigning a variable changes the reference, not the object. Multiple names can point to the same memory object.",
+            "Pro": "Python variables act as entries in a namespace dictionary pointing to memory addresses. CPython manages memory via reference counting and a cyclic garbage collector."
+        },
+        "input_output": {
+            "Beginner": "Input and output (I/O) allow programs to communicate with users. The `input()` function captures text from the user, and `print()` displays text on the screen.",
+            "Intermediate": "Python manages I/O via standard streams (`sys.stdin` and `sys.stdout`). The `input()` function blocks execution until data is received, always returning a string.",
+            "Pro": "Beneath the standard functions, professional I/O handles buffered streams. High-load applications often utilize direct stream writes or the logging module to avoid context-switching overhead."
+        }
     }
-    code_example = {
-        "Beginner": f"print('Learning {title}')",
-        "Intermediate": f"def use_{spec.topic}(value):\n    return value",
-        "Pro": "import time\nstart = time.perf_counter()\n# implementation detail\nduration = time.perf_counter() - start\nprint(round(duration, 6))",
+    
+    codes = {
+        "variables": {
+            "Beginner": "score = 0\nscore = score + 10\nprint(score) # Outputs 10",
+            "Intermediate": "a, b = 5, 10\na, b = b, a # Swap values\nprint(f'a={a}, b={b}')",
+            "Pro": "import sys\nx = [1, 2, 3]\ny = x\nprint(id(x) == id(y)) # True\nprint(sys.getrefcount(x))"
+        },
+        "input_output": {
+            "Beginner": "name = input('Name: ')\nprint('Hello', name)",
+            "Intermediate": "import sys\nsys.stdout.write('Processing...\\n')\nval = sys.stdin.readline().strip()",
+            "Pro": "import io\nbuffer = io.StringIO()\nbuffer.write('Buffered output')\nprint(buffer.getvalue())"
+        }
     }
-    challenge_focus = {
-        "Beginner": "Implement the core syntax correctly and verify the output exactly.",
-        "Intermediate": "Apply the concept in a realistic flow with clean structure.",
-        "Pro": "Solve with correctness plus runtime or architectural tradeoffs in mind.",
+
+    challenges = {
+        "Beginner": "Implement the core syntax correctly and verify the output exactly. Focus on getting the basic flow correctly.",
+        "Intermediate": "Apply the concept in a realistic workflow. Focus on correct typing, structured patterns, and clean code.",
+        "Pro": "Solve the problem with correctness while balancing runtime performance and architectural constraints.",
     }
+
+    # Fallback to generic robust content if topic specific doesn't exist
+    topic_explanation = explanations.get(topic, {}).get(level)
+    if not topic_explanation:
+        if level == "Beginner":
+            topic_explanation = f"Learning {title} introduces you to fundamental Python syntax and basic programmatic behavior. It is important to focus on clarity and predictability."
+        elif level == "Intermediate":
+            topic_explanation = f"For {title}, we apply standardized patterns and handle common workflows. This ensures code behaves robustly under normal operating conditions."
+        else:
+            topic_explanation = f"At the architectural level, {title} demands an understanding of internal memory representations and execution boundaries to maximize performance."
+
+    topic_code = codes.get(topic, {}).get(level, f"# Provide your {level.lower()} implementation for {title}\nprint('Executing {title} logic')")
 
     return f"""# {title}
 
 ## Definition
-{title} is a core Python concept used to express program behavior clearly and reliably.
+{title} is a core Python concept and programming mechanism used to express application behavior reliably and securely.
 
-## Why It Matters
-This concept appears in real applications, interviews, automation scripts, and production code paths.
+## Why it matters
+This mechanism is foundational in application codebases, optimization paths, and scripting operations. Correct implementation guarantees predictable state execution.
 
 ## Concept Explanation
-{level_explanation.get(level, level_explanation["Beginner"])}
+{topic_explanation}
 
 ## Mental Model
-Think of {title} as a building block in a larger system: each use should be predictable and composable.
+Visualize {title} as a deterministic transformation pipeline. Input state goes in, operations are applied, and predictable output is returned.
 
 ## Code Example
 ```python
-{code_example.get(level, code_example["Beginner"])}
+{topic_code}
 ```
-This example highlights the minimal pattern you should recognize and reproduce.
 
-## Real-World Use
-You will use this concept while writing APIs, processing data, and building maintainable application logic.
+## Real-world use
+Engineers use this concept extensively while structuring backend APIs, cleaning arbitrary user data, and enforcing application state consistency.
 
-## Common Mistakes
-- Treating syntax as memorization instead of understanding behavior.
-- Skipping edge cases for input, state, or output format.
+## Common mistakes
+- Misunderstanding the underlying behavior resulting in side effects.
+- Skipping edge-case validation for undefined states.
 
-## Best Practices
-- Keep naming clear and intent-focused.
-- Validate assumptions with small tests before scaling complexity.
+## Best practices
+- Write expressive, self-documenting syntax.
+- Contain state mutations and utilize strict scoping whenever possible.
 
-## Knowledge Check
-1. What rule must always hold when you apply {title}?
-2. What edge case can break a naive implementation of {title}?
+## Knowledge check
+1. How does Python enforce predictability when using {title}?
+2. What edge cases must be accommodated during the implementation of {title}?
 
-## Challenge
-{challenge_focus.get(level, challenge_focus["Beginner"])}
+## Challenge section
+{challenges.get(level, challenges["Beginner"])}
 """
 
 

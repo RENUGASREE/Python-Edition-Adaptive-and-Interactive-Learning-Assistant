@@ -406,16 +406,27 @@ export default function LessonView() {
         </button>
       );
     } else if (lessonErrorStatus === 403) {
-      title = "Placement quiz required";
-      description = "Complete the placement test to unlock this lesson.";
-      action = (
-        <button
-          onClick={() => (window.location.href = "/placement-quiz")}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-        >
-          Take the placement quiz
-        </button>
-      );
+      title = "Lesson Locked";
+      description = lessonErrorMessage || "Complete the required lessons to unlock this one.";
+      if (description.toLowerCase().includes("placement")) {
+          action = (
+            <button
+              onClick={() => (window.location.href = "/placement-quiz")}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Take the placement quiz
+            </button>
+          );
+      } else {
+          action = (
+            <button
+              onClick={() => (window.location.href = "/curriculum")}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Back to Curriculum
+            </button>
+          );
+      }
     } else if (lessonErrorStatus === 404) {
       title = "Lesson not found";
       description = "This lesson may have been removed or does not exist.";
@@ -427,7 +438,6 @@ export default function LessonView() {
           <div className="max-w-lg w-full bg-card border border-border rounded-2xl p-8 text-center space-y-4">
             <h1 className="text-2xl font-bold">{title}</h1>
             <p className="text-muted-foreground">{description}</p>
-            <p className="text-xs text-muted-foreground">{lessonErrorMessage}</p>
             {action}
           </div>
         </div>
