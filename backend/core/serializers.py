@@ -416,7 +416,9 @@ class ModuleSerializer(serializers.ModelSerializer):
             lessons = module_lessons or list(Lesson.objects.filter(module_id=obj.id).order_by("order", "id"))
 
         completed_ids = set(self.context.get("completed_lesson_ids") or [])
-        module_is_locked = self.get_quizLocked(obj)
+        
+        from .views import _module_unlocked
+        module_is_locked = not _module_unlocked(user, obj)
 
         unlocked = []
         for lesson in lessons:
