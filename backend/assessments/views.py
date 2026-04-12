@@ -32,7 +32,7 @@ class DiagnosticQuizView(APIView):
                 "quiz": DiagnosticQuizSerializer(quiz).data,
                 "questions": DiagnosticQuestionSerializer(questions, many=True).data,
             }
-            cache.set(quiz_cache_key, payload, timeout=300)
+            cache.set(quiz_cache_key, payload, timeout=3600)  # Cache for 1 hour (stable, no shuffling)
 
         attempt = DiagnosticQuizAttempt.objects.filter(user=request.user, quiz=quiz).order_by("-id").first()
         return Response({

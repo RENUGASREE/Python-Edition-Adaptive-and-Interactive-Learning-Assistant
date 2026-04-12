@@ -16,19 +16,15 @@ class DiagnosticQuestionSerializer(serializers.ModelSerializer):
         fields = ("id", "quiz", "topic", "difficulty", "text", "options", "points")
 
     def get_options(self, obj):
-        import random
         opts = list(
             DiagnosticOption.objects.filter(question=obj)
-            .order_by("id")
+            .order_by("id")  # Always stable order — matches correct_index
             .values("id", "text")
         )
         if not opts:
             raw = obj.options or []
             opts = [{"id": f"raw-{obj.id}-{i}", "text": str(t)} for i, t in enumerate(raw)]
-
-        shuffled = list(opts)
-        random.shuffle(shuffled)
-        return shuffled
+        return opts
 
 
 class DiagnosticAttemptSerializer(serializers.ModelSerializer):

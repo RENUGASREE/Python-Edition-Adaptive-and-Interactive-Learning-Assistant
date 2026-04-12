@@ -196,7 +196,21 @@ export default function PlacementQuiz() {
 
   const placementCompleted = hasTakenQuiz;
   const quiz = diagnostic?.quiz;
-  const questions = diagnostic?.questions || [];
+  const rawQuestions = diagnostic?.questions || [];
+
+  // Shuffle options once per session on the frontend (stable within session, but randomized per attempt)
+  const questions = useMemo(() => {
+    return rawQuestions.map((q: any) => {
+      const opts = Array.isArray(q.options) ? [...q.options] : [];
+      // Fisher-Yates shuffle
+      for (let i = opts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [opts[i], opts[j]] = [opts[j], opts[i]];
+      }
+      return { ...q, options: opts };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawQuestions.length]); // Only re-shuffle when question list changes (new attempt)
 
   const handleSelect = (questionId: string, optionIndex: number) => {
     if (expired) return;

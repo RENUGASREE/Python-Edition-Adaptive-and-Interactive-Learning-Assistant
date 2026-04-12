@@ -47,17 +47,23 @@ def score_diagnostic(user: User, quiz_id: int, answers: List[Dict], violation_co
         module_totals[canon_topic] = module_totals.get(canon_topic, 0) + 1
 
         selected_payload = answer_map.get(str(question.id))
-        selected_option_id = str(selected_payload.get("selectedOptionId")) if selected_payload and selected_payload.get("selectedOptionId") is not None else None
         is_correct = False
+
         if selected_payload:
-            # Try to match the option ID first (robust)
-            if question.choices.exists():
-                is_correct = any(str(choice.id) == selected_option_id and choice.is_correct for choice in question.choices.all())
-                
-            # Fallback: If ID didn't match or question has no choice objects, check the index
-            if not is_correct:
-                raw_index = selected_payload.get("selectedIndex", -1)
-                is_correct = raw_index == int(question.correct_index)
+            selected_option_id = selected_payload.get("selectedOptionId")
+            raw_index = int(selected_payload.get("selectedIndex", -1))
+
+            # Path 1 (Primary): Match by option ID — works as long as selectedOptionId is sent
+            if selected_option_id is not None and str(selected_option_id).strip():
+                opt_id_str = str(selected_option_id).strip()
+                for choice in question.choices.all():
+                    if str(choice.id) == opt_id_str:
+                        is_correct = bool(choice.is_correct)
+                        break
+
+            # Path 2 (Fallback): Match by index — reliable now that options are in stable order
+            if not is_correct and raw_index >= 0:
+                is_correct = (raw_index == int(question.correct_index or 0))
 
         if is_correct:
             correct += 1
