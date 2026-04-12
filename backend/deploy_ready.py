@@ -34,7 +34,7 @@ def setup_production():
     # 3. Seed Placement Quiz
     print("🎯 Seeding Placement Quiz...")
     try:
-        call_command('seed_placement_quiz')
+        call_command('seed_structured_diagnostic_quiz')
         print("✅ Placement Quiz seeded.")
     except Exception as e:
         print(f"❌ Error seeding placement quiz: {e}")
